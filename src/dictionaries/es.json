@@ -1,0 +1,10 @@
+{
+  "tagline": "Abierto o cerrado, y qué platillos quedan, en vivo.",
+  "open": "Abierto",
+  "closed": "Cerrado",
+  "left": "quedan ~{n}",
+  "soldOut": "Se acabó",
+  "updated": "Actualizado hace {n} min",
+  "demoLink": "Ver la página de Birria Doña Lupe",
+  "switchLang": "English"
+}

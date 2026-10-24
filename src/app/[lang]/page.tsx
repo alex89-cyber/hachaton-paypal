@@ -7,13 +7,23 @@ export default async function Home({ params }: PageProps<"/[lang]">) {
   if (!hasLocale(lang)) notFound();
   const t = await getDictionary(lang);
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 p-6">
-      <h1 className="text-4xl font-bold">¿Todavía hay?</h1>
-      <p className="text-lg">{t.tagline}</p>
-      <Link className="underline" href={`/${lang}/birria-dona-lupe`}>
-        {t.demoLink}
-      </Link>
-      <Link className="text-sm opacity-70" href={lang === "es" ? "/en" : "/es"}>
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 px-4 py-10">
+      <div>
+        <h1 className="text-5xl font-bold tracking-tight text-brand">¿Todavía hay?</h1>
+        <p className="mt-3 text-lg">{t.tagline}</p>
+      </div>
+      <div className="flex flex-col gap-3">
+        <Link className="rounded-2xl bg-brand px-5 py-4 text-center font-bold text-white" href={`/${lang}/birria-dona-lupe`}>
+          {t.demoLink}
+        </Link>
+        <Link
+          className="rounded-2xl border border-line bg-surface px-5 py-4 text-center font-semibold"
+          href={`/${lang}/panel/birria-dona-lupe`}
+        >
+          {t.ownerLink}
+        </Link>
+      </div>
+      <Link className="text-center text-sm text-muted underline" href={lang === "es" ? "/en" : "/es"}>
         {t.switchLang}
       </Link>
     </main>

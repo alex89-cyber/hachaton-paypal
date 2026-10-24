@@ -11,7 +11,10 @@ Work in progress. Done so far:
 - Recipe-based inventory with shared ingredients (`src/lib/inventory.ts`) and sell-out forecast (`src/lib/forecast.ts`), with unit tests.
 - Supabase schema with row-level security and atomic stock functions (`supabase/migrations/0001_init.sql`).
 - PayPal Orders v2 client for authorize → capture on pickup → void on no-show (`src/lib/paypal.ts`).
-- Bilingual (ES/EN) routing and a first public page for the demo stall, *Birria Doña Lupe*.
+- Bilingual (ES/EN) routing.
+- **Owner panel** (`/es/panel/birria-dona-lupe`): one-tap sales with a running ticket, cash or card, "sold out" switch per dish, portions left and sell-out forecast per dish, opening count and cash-up (corte de caja).
+- **Public page** (`/es/birria-dona-lupe`): open/closed, dishes left and freshness, refreshed every few seconds.
+- The demo runs on an in-memory store seeded with a morning of sales; the Supabase store implements the same interface (`src/lib/store`).
 
 ## How it uses PayPal and AI
 
@@ -22,8 +25,8 @@ Work in progress. Done so far:
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in PayPal sandbox, Gemini and Supabase keys
-npm run dev                  # http://localhost:3000/es/birria-dona-lupe
+cp .env.example .env.local   # optional for now: the demo runs without keys
+npm run dev                  # http://localhost:3000/es (public page + owner panel)
 npm test
 ```
 

@@ -14,7 +14,7 @@ Work in progress. Done so far:
 - Bilingual (ES/EN) routing.
 - **Owner panel** (`/es/panel/birria-dona-lupe`): one-tap sales with a running ticket, cash or card, "sold out" switch per dish, portions left and sell-out forecast per dish, opening count and cash-up (corte de caja).
 - **Public page** (`/es/birria-dona-lupe`): open/closed, dishes left and freshness, refreshed every few seconds.
-- The demo runs on an in-memory store seeded with a morning of sales; the Supabase store implements the same interface (`src/lib/store`).
+- Data lives in Supabase when `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set; without them the app falls back to an in-memory store. Both implement the same interface (`src/lib/store`), and the demo reset seeds a morning of sales.
 
 ## How it uses PayPal and AI
 
@@ -30,7 +30,7 @@ npm run dev                  # http://localhost:3000/es (public page + owner pan
 npm test
 ```
 
-Apply the database schema with the Supabase CLI (`supabase db push`) or by pasting `supabase/migrations/0001_init.sql` into the Supabase SQL editor.
+Apply the database schema with the Supabase CLI (`supabase db push`) or by pasting `supabase/migrations/0001_init.sql` and then `0002_server_access_and_demo.sql` into the Supabase SQL editor. The second file also creates the demo stall.
 
 ## Roadmap
 

@@ -60,3 +60,38 @@ export const demoDishes: Dish[] = [
     recipe: [{ ingredientId: "consome", qty: 350 }],
   },
 ];
+
+/** Row ids of the demo stall in Supabase (supabase/migrations/0002_server_access_and_demo.sql). */
+export const demoDbIds = {
+  business: "b0000000-0000-4000-8000-000000000001",
+  ingredients: {
+    carne: "10000000-0000-4000-8000-000000000001",
+    consome: "10000000-0000-4000-8000-000000000002",
+    tortilla: "10000000-0000-4000-8000-000000000003",
+    queso: "10000000-0000-4000-8000-000000000004",
+    "cebolla-cilantro": "10000000-0000-4000-8000-000000000005",
+  } as Record<string, string>,
+  dishes: {
+    "birria-plato": "20000000-0000-4000-8000-000000000001",
+    "tacos-dorados": "20000000-0000-4000-8000-000000000002",
+    quesabirria: "20000000-0000-4000-8000-000000000003",
+    "consome-vaso": "20000000-0000-4000-8000-000000000004",
+  } as Record<string, string>,
+};
+
+export type SeedSale = { dishId: string; qty: number; method: "cash" | "card"; minutesAgo: number };
+
+/** A morning of sales for the demo: one small order every ~3 minutes, heavier on quesabirrias. */
+export function demoSeedSales(): SeedSale[] {
+  const pattern = ["quesabirria", "birria-plato", "quesabirria", "tacos-dorados", "consome-vaso", "quesabirria"];
+  const out: SeedSale[] = [];
+  for (let m = 85, k = 0; m > 0; m -= 3, k++) {
+    out.push({
+      dishId: pattern[k % pattern.length],
+      qty: k % 4 === 0 ? 2 : 1,
+      method: k % 3 === 0 ? "card" : "cash",
+      minutesAgo: m,
+    });
+  }
+  return out;
+}

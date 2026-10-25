@@ -1,4 +1,4 @@
-import { demoDishes, demoIngredients } from "../demo-data";
+import { demoDishes, demoIngredients, demoSeedSales } from "../demo-data";
 import { canFulfill, deduct, orderTotalCents } from "../inventory";
 import { cashUp, type Sale, type StallState } from "../stall";
 import type { StallStore } from "./types";
@@ -13,19 +13,17 @@ export function seedDemo(now = new Date()): StallState {
   const openedAt = new Date(now.getTime() - 90 * 60_000);
   const sales: Sale[] = [];
   let ingredients = demoIngredients.map((i) => ({ ...i }));
-  // One small order every ~3 minutes, heavier on quesabirrias.
-  const pattern = ["quesabirria", "birria-plato", "quesabirria", "tacos-dorados", "consome-vaso", "quesabirria"];
-  for (let m = 85, k = 0; m > 0; m -= 3, k++) {
-    const lines = [{ dishId: pattern[k % pattern.length], qty: k % 4 === 0 ? 2 : 1 }];
+  demoSeedSales().forEach((seed, k) => {
+    const lines = [{ dishId: seed.dishId, qty: seed.qty }];
     ingredients = deduct(lines, demoDishes, ingredients);
     sales.push({
       id: `seed-${k}`,
       lines,
-      method: k % 3 === 0 ? "card" : "cash",
+      method: seed.method,
       totalCents: orderTotalCents(lines, demoDishes),
-      at: new Date(now.getTime() - m * 60_000).toISOString(),
+      at: new Date(now.getTime() - seed.minutesAgo * 60_000).toISOString(),
     });
-  }
+  });
   return {
     slug: DEMO_SLUG,
     name: "Birria Doña Lupe",

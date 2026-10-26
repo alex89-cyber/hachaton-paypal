@@ -26,6 +26,7 @@ async function accessToken(): Promise<string> {
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: "grant_type=client_credentials",
+    signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) throw new PayPalError("oauth", res.status, await res.text());
   const json = (await res.json()) as { access_token: string; expires_in: number };
@@ -53,6 +54,7 @@ async function call<T>(step: string, path: string, body?: unknown, idempotencyKe
       ...(idempotencyKey ? { "PayPal-Request-Id": idempotencyKey } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) throw new PayPalError(step, res.status, await res.text());
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);

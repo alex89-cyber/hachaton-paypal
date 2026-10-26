@@ -21,7 +21,7 @@ export const APPROVAL_MINUTES = 15;
 
 export type StartResult =
   | { ok: true; reservation: Reservation; approveUrl: string }
-  | { ok: false; reason: "closed" | "short" | "payment"; short?: string[] };
+  | { ok: false; reason: "closed" | "short" | "payment" | "error"; short?: string[] };
 
 /** Same dish twice becomes one line. */
 export function mergeLines(lines: OrderLine[]): OrderLine[] {
@@ -36,7 +36,13 @@ export async function startReservation(
 ): Promise<StartResult> {
   const lines = mergeLines(input.lines);
   const pickupBy = new Date(Date.now() + state.holdMinutes * 60_000);
-  const res = await store.reserve(state.slug, input.customerName, lines, pickupBy);
+  let res;
+  try {
+    res = await store.reserve(state.slug, input.customerName, lines, pickupBy);
+  } catch (e) {
+    console.error("reservation: store failed", e);
+    return { ok: false, reason: "error" };
+  }
   if (!res.ok) return res;
 
   const r = res.reservation;

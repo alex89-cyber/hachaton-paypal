@@ -45,6 +45,7 @@ export function AgentChat({
       const res = await fetch(`/api/stalls/${slug}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(60_000),
         body: JSON.stringify({
           lang,
           messages: next.filter((m) => !m.error).map(({ role, content }) => ({ role, content })),

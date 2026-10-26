@@ -96,6 +96,7 @@ export async function chat(
           closed: "The stall is closed.",
           short: "Not enough left for that order.",
           payment: "PayPal is not responding right now.",
+          error: "Something failed on our side; ask them to try again in a moment.",
         }[res.reason];
         return { ok: false, error: why };
       }
@@ -125,7 +126,11 @@ export async function chat(
       tools: s.isOpen ? { reserve_order: reserveOrder } : {},
       stopWhen: isStepCount(3),
       temperature: 0.3,
-      maxOutputTokens: 400,
+      // Gemini counts its thinking against this, so a tight cap cut replies off.
+      maxOutputTokens: 1200,
+      // Never leave the customer on "Escribiendo…": give up and say so.
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(20_000),
       // A menu question needs no deep reasoning; thinking was most of the wait.
       // Not every Gemini model accepts this, so a failure retries without it.
       providerOptions: thinking

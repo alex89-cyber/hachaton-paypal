@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "¿Todavía hay?",
   description: "Live menu, inventory and PayPal reservations for food stalls that sell until they run out.",
+  manifest: "/manifest.webmanifest",
+  icons: { apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "¿Todavía hay?", statusBarStyle: "default" },
 };
 
 export function generateStaticParams() {

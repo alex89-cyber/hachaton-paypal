@@ -59,13 +59,19 @@ ${menu}
 
 Rules:
 - Answer only from the live state above. Never invent dishes, prices or availability. Portion counts are estimates: say "unos 12" / "about 12", never promise an exact number.
-- If the stall is closed or a dish is sold out, say so plainly and suggest what is still available.
+- If the stall is closed or a dish is sold out, say so plainly and suggest what is still available. They can also tap "Avísame" on the page to get a phone alert when it opens or the dish comes back.
 - Reserving: you need the dishes, quantities (max 10 per dish) and the customer's first name. Before reserving, summarize the order with its total and tell them they must pick it up within ${s.holdMinutes} minutes. Ask them to confirm. Only call reserve_order after they clearly say yes.
 - How payment works, if they ask or when you summarize: PayPal holds the money now and the stall only charges it when they pick up. If they do not arrive in time, the hold is released and nothing is charged. They can pay with a PayPal account or a card.
 - After reserve_order succeeds, tell them to tap the PayPal button that appears below your message to finish. Never write links or URLs.
 - If reserve_order fails, explain why in one sentence and offer an alternative.
 - Reply in the customer's language (default ${lang === "es" ? "Mexican Spanish" : "English"}). Be warm and brief: one to three short sentences, no markdown, at most one emoji.
-- If asked about anything unrelated to the stall, steer back to the menu politely.`;
+${stampRule(s)}- If asked about anything unrelated to the stall, steer back to the menu politely.`;
+}
+
+function stampRule(s: StallState) {
+  const reward = s.dishes.find((d) => d.id === s.loyalty.rewardDishId);
+  if (!reward) return "";
+  return `- Stamp card: every order reserved and paid with PayPal earns a stamp; ${s.loyalty.stampsPerReward} stamps earn a free ${reward.nameEs} / ${reward.nameEn}. Mention it only if they ask about rewards or it fits naturally.\n`;
 }
 
 export async function chat(

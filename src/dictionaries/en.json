@@ -30,7 +30,19 @@
     "confirmedTitle": "All set, {name}! Your order is reserved",
     "confirmedBody": "PayPal holds {total} and you're only charged when it's handed to you. Pick it up before {time}",
     "cancelledNote": "You cancelled the payment. Nothing was reserved or charged.",
-    "errorNote": "We couldn't confirm your reservation. You weren't charged; please try again."
+    "errorNote": "We couldn't confirm your reservation. You weren't charged; please try again.",
+    "notifyOpen": "Notify me when it opens",
+    "notifyDish": "Notify me",
+    "notifyOn": "We'll let you know",
+    "notifyOpenOn": "Done, we'll let you know as soon as it opens.",
+    "notifyDenied": "Your browser blocked notifications. Allow them for this site in its settings.",
+    "notifyIos": "On iPhone: tap Share, then Add to Home Screen. Open the app from there to turn on the alert.",
+    "notifyError": "Couldn't turn on the alert. Try again.",
+    "stampsTitle": "Stamp card",
+    "stampsHowTo": "Every order you reserve and pay with PayPal earns a stamp. Collect {n} and get a free {reward}.",
+    "stampsCount": "You have {have} of {n}.",
+    "stampsReady": "You've earned a free {reward}! Ask for it at pickup.",
+    "stampsNext": "This order adds a stamp when you pick it up."
   },
   "owner": {
     "title": "Panel",
@@ -76,6 +88,12 @@
       "captured": "delivered",
       "voided": "cancelled",
       "expired": "expired"
-    }
+    },
+    "stampsLine": "⭐ {have} of {n} stamps",
+    "rewardReady": "🎁 {name} has a free {reward}",
+    "redeem": "Redeem",
+    "redeemed": "Reward redeemed: hand over one {reward}",
+    "redeemShort": "Not enough stock for the reward",
+    "redeemNotEnough": "Not enough stamps anymore"
   }
 }

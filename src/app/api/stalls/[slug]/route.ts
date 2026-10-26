@@ -1,7 +1,8 @@
-import { connection } from "next/server";
+import { after, connection } from "next/server";
 import { z } from "zod";
 import { ownerView, publicSnapshot } from "@/lib/stall";
 import { PayPalError } from "@/lib/paypal";
+import { notifyWaiting } from "@/lib/push";
 import { cancel, deliver, loadStall } from "@/lib/reservations";
 import { store } from "@/lib/store";
 
@@ -32,7 +33,11 @@ const Action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reset") }),
   z.object({ action: z.literal("deliver"), reservationId: z.string().min(1) }),
   z.object({ action: z.literal("cancelReservation"), reservationId: z.string().min(1) }),
+  z.object({ action: z.literal("redeem"), reservationId: z.string().min(1) }),
 ]);
+
+/** Actions that can make a dish available again, or open the stall: tell whoever is waiting. */
+const MAY_BRING_BACK = new Set(["open", "soldOut", "cancelReservation", "reset"]);
 
 export async function POST(request: Request, ctx: RouteContext<"/api/stalls/[slug]">) {
   const { slug } = await ctx.params;
@@ -41,6 +46,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/stalls/[slu
   const parsed = Action.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "bad_request" }, { status: 400 });
   const a = parsed.data;
+
+  if (MAY_BRING_BACK.has(a.action)) {
+    after(async () => {
+      const s = await store.get(slug);
+      if (s) await notifyWaiting(s).catch((e) => console.error("push: notify failed", e));
+    });
+  }
 
   switch (a.action) {
     case "sale": {
@@ -71,6 +83,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/stalls/[slu
         console.error(`${a.action} failed`, e);
         return Response.json({ error: e instanceof PayPalError ? "paypal" : "failed" }, { status: 502 });
       }
+      return Response.json(ownerView((await store.get(slug))!));
+    }
+    case "redeem": {
+      const r = await store.getReservation(slug, a.reservationId);
+      if (!r?.payerId) return Response.json({ error: "not_found" }, { status: 404 });
+      const res = await store.redeem(slug, r.payerId);
+      if (!res.ok) return Response.json({ error: res.reason }, { status: 409 });
       return Response.json(ownerView((await store.get(slug))!));
     }
   }

@@ -8,6 +8,7 @@ import {
   voidAuthorization,
 } from "./paypal";
 import type { Reservation, StallState } from "./stall";
+import { notifyWaiting } from "./push";
 import { store } from "./store";
 
 // The reservation lifecycle across the store and PayPal:
@@ -74,7 +75,7 @@ export async function confirmApproval(slug: string, id: string, orderId: string)
   if (!r || r.paypalOrderId !== orderId) return null;
   if (r.status !== "held") return r;
   const auth = await authorizeOrder(orderId);
-  await store.markAuthorized(slug, id, auth.authorizationId);
+  await store.markAuthorized(slug, id, auth.authorizationId, auth.payerId);
   return store.getReservation(slug, id);
 }
 
@@ -136,5 +137,9 @@ export async function sweep(state: StallState, now = new Date()): Promise<boolea
 export async function loadStall(slug: string): Promise<StallState | null> {
   const s = await store.get(slug);
   if (!s) return null;
-  return (await sweep(s)) ? store.get(slug) : s;
+  if (!(await sweep(s))) return s;
+  // Stock came back, so a dish someone is waiting for may be available again.
+  const fresh = await store.get(slug);
+  if (fresh) notifyWaiting(fresh).catch((e) => console.error("push: notify failed", e));
+  return fresh;
 }

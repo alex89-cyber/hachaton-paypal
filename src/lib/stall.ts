@@ -31,9 +31,22 @@ export type Reservation = {
   createdAt: string; // ISO
   paypalOrderId: string | null;
   paypalAuthorizationId: string | null;
+  /** PayPal payer id, known once the customer approves. Keys the stamp card. */
+  payerId: string | null;
 };
 
 export const isActive = (r: Reservation) => r.status === "held" || r.status === "authorized";
+
+/** Remembers the customer's PayPal payer id so the stall page can show their stamp card. */
+export const PAYER_COOKIE = "th_payer";
+
+/** Stamp card: every PayPal order handed over adds a stamp; stampsPerReward of them buy the reward dish. */
+export type Loyalty = {
+  stampsPerReward: number;
+  rewardDishId: string | null;
+  /** Unspent stamps by PayPal payer id, for the payers in `reservations`. */
+  stamps: Record<string, number>;
+};
 
 export type StallState = {
   slug: string;
@@ -53,6 +66,7 @@ export type StallState = {
   holdMinutes: number;
   /** Active reservations plus recent finished ones. */
   reservations: Reservation[];
+  loyalty: Loyalty;
 };
 
 export type PublicDish = {
@@ -108,6 +122,7 @@ export type OwnerView = {
   ingredients: Ingredient[];
   today: CashUp;
   reservations: Reservation[];
+  loyalty: Loyalty;
 };
 
 export function ownerView(s: StallState, now = new Date()): OwnerView {
@@ -127,6 +142,7 @@ export function ownerView(s: StallState, now = new Date()): OwnerView {
     updatedAt: s.updatedAt,
     ingredients: s.ingredients,
     today: cashUp(s),
+    loyalty: s.loyalty,
     reservations: [...s.reservations].sort(
       (a, b) => Number(isActive(b)) - Number(isActive(a)) || a.pickupBy.localeCompare(b.pickupBy),
     ),

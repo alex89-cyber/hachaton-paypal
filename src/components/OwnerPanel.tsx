@@ -162,6 +162,16 @@ export function OwnerPanel({
           if (r?.error) setToast({ kind: "bad", text: o.paypalError });
           else if (r) setToast({ kind: "ok", text: o.reservationCancelled });
         }}
+        onRedeem={async (id, reward) => {
+          const r = await act({ action: "redeem", reservationId: id });
+          if (!r) return;
+          if (!r.error) setToast({ kind: "ok", text: fill(o.redeemed, { reward }) });
+          else
+            setToast({
+              kind: "bad",
+              text: r.error === "closed" ? o.closedError : r.error === "short" ? o.redeemShort : o.redeemNotEnough,
+            });
+        }}
       />
 
       <section className="grid grid-cols-2 gap-3 p-4">
@@ -441,6 +451,7 @@ function Reservations({
   busy,
   onDeliver,
   onCancel,
+  onRedeem,
 }: {
   view: OwnerView;
   t: Dictionary;
@@ -450,6 +461,7 @@ function Reservations({
   busy: boolean;
   onDeliver: (id: string) => void;
   onCancel: (id: string) => void;
+  onRedeem: (id: string, reward: string) => void;
 }) {
   const o = t.owner;
   const active = view.reservations.filter((r) => r.status === "held" || r.status === "authorized");
@@ -457,6 +469,29 @@ function Reservations({
   if (active.length === 0 && done.length === 0) return null;
   const dish = new Map(view.dishes.map((d) => [d.id, lang === "es" ? d.nameEs : d.nameEn]));
   const items = (r: Reservation) => r.lines.map((l) => `${l.qty} × ${dish.get(l.dishId) ?? l.dishId}`).join(", ");
+  const { stampsPerReward: per, rewardDishId } = view.loyalty;
+  const reward = rewardDishId ? (dish.get(rewardDishId) ?? "").toLowerCase() : "";
+  // The customer's stamp card, shown on each of their reservations. With a
+  // full card the owner hands the reward over and taps "Canjear".
+  const stamps = (r: Reservation, compact = false) => {
+    if (!r.payerId || !rewardDishId) return null;
+    const have = view.loyalty.stamps[r.payerId] ?? 0;
+    if (have < per) {
+      return compact ? null : <p className="mt-1 text-sm text-muted">{fill(o.stampsLine, { have, n: per })}</p>;
+    }
+    return (
+      <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-warn-soft px-3 py-2 text-warn">
+        <p className="text-sm font-semibold">{fill(o.rewardReady, { name: r.customerName, reward })}</p>
+        <button
+          onClick={() => onRedeem(r.id, reward)}
+          disabled={busy}
+          className="shrink-0 rounded-full bg-warn px-3 py-1.5 text-sm font-bold text-white active:scale-95 disabled:opacity-40"
+        >
+          {o.redeem}
+        </button>
+      </div>
+    );
+  };
 
   return (
     <section className="flex flex-col gap-2 px-4 pt-4">
@@ -477,6 +512,7 @@ function Reservations({
               ? fill(o.paidHeld, { time: clock(r.pickupBy, timezone, lang) })
               : o.awaitingPayment}
           </p>
+          {stamps(r)}
           <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
             <button
               onClick={() => onDeliver(r.id)}
@@ -496,12 +532,15 @@ function Reservations({
         </article>
       ))}
       {done.map((r) => (
-        <p key={r.id} className="flex justify-between gap-3 px-1 text-sm text-muted">
-          <span className="truncate">
-            {r.customerName} · {items(r)}
-          </span>
-          <span className="shrink-0">{o.reservationStatus[r.status]}</span>
-        </p>
+        <div key={r.id} className="px-1">
+          <p className="flex justify-between gap-3 text-sm text-muted">
+            <span className="truncate">
+              {r.customerName} · {items(r)}
+            </span>
+            <span className="shrink-0">{o.reservationStatus[r.status]}</span>
+          </p>
+          {r.status === "captured" && stamps(r, true)}
+        </div>
       ))}
     </section>
   );

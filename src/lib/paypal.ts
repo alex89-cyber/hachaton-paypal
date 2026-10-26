@@ -124,11 +124,17 @@ export async function createReservationOrder(input: ReservationOrderInput) {
 export async function authorizeOrder(orderId: string) {
   const res = await call<{
     status: string;
+    payer?: { payer_id?: string };
     purchase_units: { payments?: { authorizations?: { id: string; status: string; expiration_time?: string }[] } }[];
   }>("authorize_order", `/v2/checkout/orders/${orderId}/authorize`, {}, `authorize-${orderId}`);
   const auth = res.purchase_units[0]?.payments?.authorizations?.[0];
   if (!auth) throw new PayPalError("authorize_order", 200, `no authorization (order status ${res.status})`);
-  return { authorizationId: auth.id, status: auth.status, expiresAt: auth.expiration_time ?? null };
+  return {
+    authorizationId: auth.id,
+    status: auth.status,
+    expiresAt: auth.expiration_time ?? null,
+    payerId: res.payer?.payer_id ?? null,
+  };
 }
 
 /** "Entregado": charges the held amount. */

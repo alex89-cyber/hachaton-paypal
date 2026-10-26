@@ -5,12 +5,16 @@ import type { Dictionary } from "@/dictionaries";
 import { clock, fill, minutesSince, money } from "@/lib/format";
 import type { PublicSnapshot } from "@/lib/stall";
 import { AgentChat } from "./AgentChat";
+import { NotifyButton, forgetWatch } from "./NotifyButton";
 
 /** Shown after PayPal sends the customer back. */
 export type Confirmation =
   | { kind: "reserved"; name: string; pickupBy: string; totalCents: number }
   | { kind: "cancelled" }
   | { kind: "error" };
+
+/** The customer's stamp card. `have` is null until they have paid once with PayPal here. */
+export type StampCardInfo = { have: number | null; perReward: number; reward: string };
 
 const POLL_MS = 5_000;
 const FEW = 5;
@@ -22,12 +26,17 @@ export function PublicStall({
   lang,
   timezone,
   confirmation,
+  stampCard,
+  vapidKey,
   t,
 }: {
   initial: PublicSnapshot;
   lang: "es" | "en";
   timezone: string;
   confirmation: Confirmation | null;
+  stampCard: StampCardInfo | null;
+  /** Set when push alerts are configured on the server. */
+  vapidKey: string | null;
   t: Dictionary;
 }) {
   const [snap, setSnap] = useState(initial);
@@ -50,6 +59,13 @@ export function PublicStall({
       clearInterval(id);
     };
   }, [initial.slug]);
+
+  // An alert that fired is done: offer it again the next time it runs out.
+  useEffect(() => {
+    if (!snap.isOpen) return;
+    forgetWatch(snap.slug, null);
+    for (const d of snap.dishes) if (d.portions > 0) forgetWatch(snap.slug, d.id);
+  }, [snap]);
 
   const mins = minutesSince(snap.updatedAt, now);
   const available = snap.dishes.filter((d) => d.portions > 0);
@@ -86,6 +102,7 @@ export function PublicStall({
                   total: money(confirmation.totalCents, snap.currency, lang),
                 })}
               </p>
+              {stampCard && <p className="mt-1 text-sm font-semibold">⭐ {t.public.stampsNext}</p>}
             </>
           ) : (
             <p className="font-semibold">
@@ -96,7 +113,10 @@ export function PublicStall({
       )}
 
       {!snap.isOpen ? (
-        <p className="rounded-2xl bg-surface p-5 text-muted shadow-sm">{t.closedNote}</p>
+        <div className="flex flex-col gap-3 rounded-2xl bg-surface p-5 shadow-sm">
+          <p className="text-muted">{t.closedNote}</p>
+          {vapidKey && <NotifyButton slug={snap.slug} dishId={null} lang={lang} vapidKey={vapidKey} t={t} wide />}
+        </div>
       ) : (
         <ul className="flex flex-col gap-3">
           {[...available, ...gone].map((d) => {
@@ -105,21 +125,26 @@ export function PublicStall({
             return (
               <li
                 key={d.id}
-                className={`flex items-center justify-between gap-4 rounded-2xl bg-surface p-4 shadow-sm ${out ? "opacity-60" : ""}`}
+                className="flex items-center justify-between gap-4 rounded-2xl bg-surface p-4 shadow-sm"
               >
-                <div className="min-w-0">
+                <div className={`min-w-0 ${out ? "opacity-60" : ""}`}>
                   <p className={`truncate text-lg font-semibold ${out ? "line-through" : ""}`}>
                     {lang === "es" ? d.nameEs : d.nameEn}
                   </p>
                   <p className="text-sm text-muted">{money(d.priceCents, snap.currency, lang)}</p>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
-                    out ? "bg-bad-soft text-bad" : few ? "bg-warn-soft text-warn" : "bg-ok-soft text-ok"
-                  }`}
-                >
-                  {out ? t.soldOut : few ? t.fewLeft : fill(t.left, { n: d.portions })}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <span
+                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                      out ? "bg-bad-soft text-bad" : few ? "bg-warn-soft text-warn" : "bg-ok-soft text-ok"
+                    }`}
+                  >
+                    {out ? t.soldOut : few ? t.fewLeft : fill(t.left, { n: d.portions })}
+                  </span>
+                  {out && vapidKey && (
+                    <NotifyButton slug={snap.slug} dishId={d.id} lang={lang} vapidKey={vapidKey} t={t} />
+                  )}
+                </div>
               </li>
             );
           })}
@@ -127,7 +152,39 @@ export function PublicStall({
       )}
 
       <AgentChat slug={snap.slug} lang={lang} currency={snap.currency} timezone={timezone} isOpen={snap.isOpen} t={t} />
+      {stampCard && <StampCard card={stampCard} t={t} />}
       <p className="text-center text-xs text-muted">{t.madeWith}</p>
     </div>
+  );
+}
+
+function StampCard({ card, t }: { card: StampCardInfo; t: Dictionary }) {
+  const p = t.public;
+  const have = card.have ?? 0;
+  const ready = have >= card.perReward;
+  const vars = { have, n: card.perReward, reward: card.reward.toLowerCase() };
+  return (
+    <section className={`flex flex-col gap-3 rounded-2xl p-4 shadow-sm ${ready ? "bg-warn-soft" : "bg-surface"}`}>
+      <h2 className="text-lg font-bold">{p.stampsTitle}</h2>
+      <ol className="grid grid-cols-5 gap-2" aria-label={fill(p.stampsCount, vars)}>
+        {Array.from({ length: card.perReward }, (_, i) => (
+          <li
+            key={i}
+            className={`flex aspect-square items-center justify-center rounded-full border-2 text-lg ${
+              i < have ? "border-brand bg-brand text-white" : "border-dashed border-line text-muted"
+            }`}
+          >
+            {i < have ? "★" : i === card.perReward - 1 ? "🎁" : ""}
+          </li>
+        ))}
+      </ol>
+      <p className={`text-sm ${ready ? "font-semibold text-warn" : "text-muted"}`}>
+        {ready
+          ? fill(p.stampsReady, vars)
+          : card.have === null
+            ? fill(p.stampsHowTo, vars)
+            : `${fill(p.stampsCount, vars)} ${fill(p.stampsHowTo, vars)}`}
+      </p>
+    </section>
   );
 }

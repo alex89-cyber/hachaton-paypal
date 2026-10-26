@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { demoDbIds, demoIngredients, demoSeedSales } from "../demo-data";
 import type { Dish, Ingredient } from "../inventory";
 import { cashUp, type PaymentMethod, type Reservation, type ReservationStatus, type Sale, type StallState } from "../stall";
-import type { ReserveResult, SaleResult, StallStore } from "./types";
+import type { RedeemResult, ReserveResult, SaleResult, StallStore, Watch } from "./types";
 
 // Supabase-backed store. Runs on the server with the secret key; stock moves go
 // through the SQL functions in supabase/migrations so they stay atomic.
@@ -29,6 +29,8 @@ type BusinessRow = {
   timezone: string;
   is_open: boolean;
   hold_minutes: number;
+  stamps_per_reward: number;
+  reward_dish_id: string | null;
   updated_at: string;
 };
 
@@ -41,11 +43,12 @@ type ReservationRow = {
   created_at: string;
   paypal_order_id: string | null;
   paypal_authorization_id: string | null;
+  payer_id: string | null;
   reservation_items: { dish_id: string; qty: number }[];
 };
 
 const RESERVATION_COLS =
-  "id, customer_name, total_cents, status, pickup_by, created_at, paypal_order_id, paypal_authorization_id, reservation_items(dish_id, qty)";
+  "id, customer_name, total_cents, status, pickup_by, created_at, paypal_order_id, paypal_authorization_id, payer_id, reservation_items(dish_id, qty)";
 
 const toReservation = (r: ReservationRow): Reservation => ({
   id: r.id,
@@ -56,6 +59,7 @@ const toReservation = (r: ReservationRow): Reservation => ({
   createdAt: new Date(r.created_at).toISOString(),
   paypalOrderId: r.paypal_order_id,
   paypalAuthorizationId: r.paypal_authorization_id,
+  payerId: r.payer_id,
   lines: r.reservation_items.map((l) => ({ dishId: l.dish_id, qty: l.qty })),
 });
 
@@ -93,6 +97,15 @@ async function load(b: BusinessRow): Promise<StallState> {
     db().from("reservations").select(RESERVATION_COLS).eq("business_id", b.id).gte("created_at", recent).order("created_at"),
   ]);
   const reservations = ((check(resRes, "reservations") ?? []) as ReservationRow[]).map(toReservation);
+  const payers = [...new Set(reservations.flatMap((r) => (r.payerId ? [r.payerId] : [])))];
+  const stamps: Record<string, number> = Object.fromEntries(payers.map((p) => [p, 0]));
+  if (payers.length) {
+    const cards = check(
+      await db().from("stamp_cards").select("payer_id, stamps").eq("business_id", b.id).in("payer_id", payers),
+      "stamp cards",
+    );
+    for (const c of cards ?? []) stamps[c.payer_id] = c.stamps;
+  }
 
   const ingredients: Ingredient[] = (check(ingRes, "ingredients") ?? []).map((i) => ({
     id: i.id,
@@ -146,6 +159,7 @@ async function load(b: BusinessRow): Promise<StallState> {
     sales,
     holdMinutes: b.hold_minutes,
     reservations,
+    loyalty: { stampsPerReward: b.stamps_per_reward, rewardDishId: b.reward_dish_id, stamps },
   };
 }
 
@@ -267,12 +281,17 @@ export const supabaseStore: StallStore = {
     );
   },
 
-  async markAuthorized(slug, id, authorizationId) {
+  async markAuthorized(slug, id, authorizationId, payerId) {
     const b = await must(slug);
     check(
       await db()
         .from("reservations")
-        .update({ status: "authorized", paypal_authorization_id: authorizationId, updated_at: new Date().toISOString() })
+        .update({
+          status: "authorized",
+          paypal_authorization_id: authorizationId,
+          payer_id: payerId,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", id)
         .eq("business_id", b.id)
         .eq("status", "held"),
@@ -290,5 +309,51 @@ export const supabaseStore: StallStore = {
   async release(slug, id, status) {
     await must(slug);
     return Boolean(check(await db().rpc("release_reservation", { p_reservation: id, p_status: status }), "release"));
+  },
+
+  async stamps(slug, payerId) {
+    const b = await must(slug);
+    const card = check(
+      await db().from("stamp_cards").select("stamps").eq("business_id", b.id).eq("payer_id", payerId).maybeSingle(),
+      "stamp card",
+    ) as { stamps: number } | null;
+    return card?.stamps ?? 0;
+  },
+
+  async redeem(slug, payerId): Promise<RedeemResult> {
+    const b = await must(slug);
+    const r = await db().rpc("redeem_reward", { p_business: b.id, p_payer: payerId });
+    if (r.error) {
+      if (r.error.message.includes("not_enough_stamps")) return { ok: false, reason: "not_enough" };
+      if (r.error.message.includes("no_reward")) return { ok: false, reason: "no_reward" };
+      const e = stockError(r.error);
+      if (e) return { ok: false, reason: e.reason };
+      throw new Error(`Supabase redeem_reward: ${r.error.message}`);
+    }
+    return { ok: true, stampsLeft: r.data as number };
+  },
+
+  async addWatch(slug, w) {
+    const b = await must(slug);
+    check(
+      await db().rpc("add_watch", {
+        p_business: b.id,
+        p_dish: w.dishId,
+        p_endpoint: w.endpoint,
+        p_p256dh: w.p256dh,
+        p_auth: w.auth,
+        p_lang: w.lang,
+      }),
+      "add_watch",
+    );
+  },
+
+  async claimWatches(slug, open, dishIds): Promise<Watch[]> {
+    const b = await must(slug);
+    const rows = check(
+      await db().rpc("claim_watches", { p_business: b.id, p_open: open, p_dishes: dishIds }),
+      "claim_watches",
+    ) as { dish_id: string | null; endpoint: string; p256dh: string; auth: string; lang: "es" | "en" }[];
+    return (rows ?? []).map((w) => ({ dishId: w.dish_id, endpoint: w.endpoint, p256dh: w.p256dh, auth: w.auth, lang: w.lang }));
   },
 };

@@ -30,7 +30,19 @@
     "confirmedTitle": "¡Listo, {name}! Tu pedido está apartado",
     "confirmedBody": "PayPal retiene {total} y solo se cobra cuando te lo entregan. Recógelo antes de las {time}",
     "cancelledNote": "Cancelaste el pago. No se apartó nada ni se cobró nada.",
-    "errorNote": "No pudimos confirmar tu apartado. No se te cobró nada; intenta de nuevo."
+    "errorNote": "No pudimos confirmar tu apartado. No se te cobró nada; intenta de nuevo.",
+    "notifyOpen": "Avísame cuando abra",
+    "notifyDish": "Avísame",
+    "notifyOn": "Te avisamos",
+    "notifyOpenOn": "Listo, te avisamos en cuanto abra.",
+    "notifyDenied": "Tu navegador bloqueó los avisos. Actívalos para este sitio en sus ajustes.",
+    "notifyIos": "En iPhone: toca Compartir y luego Agregar a inicio. Abre la app desde ahí para activar el aviso.",
+    "notifyError": "No se pudo activar el aviso. Intenta otra vez.",
+    "stampsTitle": "Tarjeta de sellos",
+    "stampsHowTo": "Cada pedido que apartas y pagas con PayPal suma un sello. Junta {n} y te regalamos una {reward}.",
+    "stampsCount": "Llevas {have} de {n}.",
+    "stampsReady": "¡Ya tienes una {reward} gratis! Pídela al recoger.",
+    "stampsNext": "Este apartado te suma un sello cuando lo recojas."
   },
   "owner": {
     "title": "Panel",
@@ -76,6 +88,12 @@
       "captured": "entregado",
       "voided": "cancelado",
       "expired": "vencido"
-    }
+    },
+    "stampsLine": "⭐ {have} de {n} sellos",
+    "rewardReady": "🎁 {name} tiene una {reward} gratis",
+    "redeem": "Canjear",
+    "redeemed": "Premio canjeado: entrega una {reward}",
+    "redeemShort": "No alcanza el inventario para el premio",
+    "redeemNotEnough": "Ya no tiene sellos suficientes"
   }
 }

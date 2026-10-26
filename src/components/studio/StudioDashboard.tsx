@@ -2,10 +2,10 @@
 
 import { AgStudioAiModule, AgStudioLicenseManager, createAiHarness, studioTheme, type AgStudioApi } from "ag-studio";
 import { AgStudio } from "ag-studio-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CashUpTables } from "@/lib/analytics";
 import { geminiAdapter } from "./geminiAdapter";
-import { dataSources, initialReport } from "./report";
+import { cashUpFacts, dataSources, initialReport } from "./report";
 import { ticketWidget, type TicketContext } from "./TicketWidget";
 
 // The cash-up in AG Studio: the day's sales, inventory and reservations, a
@@ -93,10 +93,12 @@ export default function StudioDashboard({
       menu: [{ label: lang === "es" ? "Del puesto" : "Stall", widgetIds: [ticket.id] }, ...base.menu],
     });
   }, [lang]);
+  // Read on each turn, so "Actualizar" also refreshes what the assistant knows.
+  const adapter = useMemo(() => geminiAdapter(lang), [lang]);
+  useEffect(() => adapter.setFacts(cashUpFacts(tables)), [adapter, tables]);
   const ai = useMemo(() => {
-    const adapter = geminiAdapter(lang);
     return ({ api }: { api: AgStudioApi }) => createAiHarness(api, { adapter, primary: "lead", promptStarters: starters[lang] });
-  }, [lang]);
+  }, [lang, adapter]);
 
   return (
     <AgStudio

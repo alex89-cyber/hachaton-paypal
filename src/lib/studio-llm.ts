@@ -22,14 +22,19 @@ export type StudioRequest = {
   toolChoice?: "auto" | "none" | "required" | { name: string };
   responseFormat?: { type: "text" } | { type: "json"; name: string; description?: string; schema: Record<string, unknown> };
   lang: "es" | "en";
+  /** The day's numbers, summed up in the browser. */
+  facts?: string;
 };
 
 const google = createGoogleGenerativeAI({ baseURL: process.env.GOOGLE_GENERATIVE_AI_BASE_URL || undefined });
-// Studio's tools are large; Flash follows them better than Flash-Lite, which
-// stays as the fallback when Flash is busy.
-const MODELS = [process.env.STUDIO_GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-lite-latest"];
+// Flash-Lite first: Flash was often "high demand" and each Studio answer takes
+// several turns, so a slow model makes the owner wait minutes.
+const MODELS = [process.env.STUDIO_GEMINI_MODEL || "gemini-flash-lite-latest", "gemini-flash-latest"];
+const TURN_TIMEOUT_MS = 25_000;
+// Tool calls the model may make for one request before it must answer.
+const MAX_CALLS = 8;
 
-const domain = (lang: "es" | "en") =>
+const domain = (lang: "es" | "en", facts?: string) =>
   [
     "",
     "## Context",
@@ -40,7 +45,27 @@ const domain = (lang: "es" | "en") =>
     lang === "es"
       ? "Always answer the user in Mexican Spanish, and write widget titles in Spanish."
       : "Answer the user in English, and write widget titles in English.",
+    ...(facts
+      ? [
+          "",
+          "## Today's numbers (already computed, exact)",
+          facts,
+          "",
+          "When these numbers answer the question, answer right away from them: do not delegate and do not query the data.",
+          "Use tools only to add or change widgets, and keep it to the few calls needed. To compare per dish, group by ventas.platillo; per payment method, ventas.metodo; per hour, ventas.horaDelDia.",
+        ]
+      : []),
   ].join("\n");
+
+/** Calls made since the last user message, and whether the last ones repeat. */
+function callBudget(items: StudioItem[]) {
+  let i = items.length;
+  while (i > 0 && !(items[i - 1].type === "message" && (items[i - 1] as { role: string }).role === "user")) i--;
+  const calls = items.slice(i).filter((x): x is Extract<StudioItem, { type: "function_call" }> => x.type === "function_call");
+  const sig = (c: (typeof calls)[number]) => `${c.name}:${c.arguments}`;
+  const last = calls.slice(-3).map(sig);
+  return { count: calls.length, looping: last.length === 3 && new Set(last).size === 1 };
+}
 
 function textOf(content: { type: string; text?: string; refusal?: string }[]) {
   return content.map((c) => c.text ?? c.refusal ?? "").join("");
@@ -90,8 +115,10 @@ export function toMessages(items: StudioItem[]): { system: string[]; messages: M
 
 export async function studioTurn(req: StudioRequest, signal: AbortSignal) {
   const { system, messages } = toMessages(req.input);
+  const budget = callBudget(req.input);
+  const stop = budget.count >= MAX_CALLS || budget.looping;
   const tools: ToolSet = {};
-  for (const t of req.tools ?? []) {
+  for (const t of stop ? [] : (req.tools ?? [])) {
     if (t.kind && t.kind !== "client") continue;
     tools[t.name] = tool({ description: t.description, inputSchema: jsonSchema(t.parameters) });
   }
@@ -101,11 +128,17 @@ export async function studioTurn(req: StudioRequest, signal: AbortSignal) {
   const format = req.responseFormat;
 
   let lastError: unknown;
+  const started = Date.now();
   for (const modelId of [...new Set(MODELS)]) {
     try {
       const r = await generateText({
         model: google(modelId),
-        instructions: [req.instructions ?? "", ...system, domain(req.lang)].join("\n\n"),
+        instructions: [
+          req.instructions ?? "",
+          ...system,
+          domain(req.lang, req.facts?.slice(0, 6000)),
+          stop ? "You have used enough tools. Do not call any more: answer the user now with what you have." : "",
+        ].join("\n\n"),
         messages,
         tools: Object.keys(tools).length ? tools : undefined,
         toolChoice: Object.keys(tools).length ? toolChoice : undefined,
@@ -116,9 +149,11 @@ export async function studioTurn(req: StudioRequest, signal: AbortSignal) {
         temperature: 0.2,
         maxOutputTokens: 4000,
         maxRetries: 0,
-        abortSignal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
+        abortSignal: AbortSignal.any([signal, AbortSignal.timeout(TURN_TIMEOUT_MS)]),
       });
-      console.log(`studio: ${modelId} ${r.toolCalls.length} call(s) ${r.usage.totalTokens ?? "?"} tokens`);
+      console.log(
+        `studio: ${modelId} ${r.toolCalls.length} call(s) ${r.usage.totalTokens ?? "?"} tokens ${Date.now() - started} ms${stop ? " (tools cut)" : ""}`,
+      );
       return {
         model: modelId,
         text: r.text,

@@ -14,8 +14,13 @@ type Turn = {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-export function geminiAdapter(lang: "es" | "en"): AgLlmAdapter {
+/** `setFacts` takes the day's numbers, sent along with every turn. */
+export function geminiAdapter(lang: "es" | "en"): AgLlmAdapter & { setFacts(text: string): void } {
+  let facts = "";
   return {
+    setFacts(text) {
+      facts = text;
+    },
     executeTurn(request, options) {
       const events: AgAiEvent[] = [];
       const waiting: { wake?: () => void } = {};
@@ -28,7 +33,7 @@ export function geminiAdapter(lang: "es" | "en"): AgLlmAdapter {
           const res = await fetch("/api/studio/llm", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...request, lang }),
+            body: JSON.stringify({ ...request, lang, facts }),
             signal: options?.signal,
           });
           if (!res.ok) {

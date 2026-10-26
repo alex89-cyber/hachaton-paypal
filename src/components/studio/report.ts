@@ -234,3 +234,36 @@ export function initialReport(lang: Lang): AgReportState {
     version: "3.0.0",
   } as unknown as AgReportState;
 }
+
+/**
+ * The day's numbers in a few lines, sent with every assistant turn so the
+ * model can answer simple questions at once instead of querying the data
+ * step by step (slow, and small models get the grouping wrong).
+ */
+export function cashUpFacts(t: CashUpTables): string {
+  const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")} ${t.currency}`;
+  const group = (key: "platillo" | "metodo" | "horaDelDia") => {
+    const m = new Map<string, { importe: number; cantidad: number }>();
+    for (const r of t.ventas) {
+      const g = m.get(r[key]) ?? { importe: 0, cantidad: 0 };
+      g.importe += r.importe;
+      g.cantidad += r.cantidad;
+      m.set(r[key], g);
+    }
+    return [...m].sort((a, b) => b[1].importe - a[1].importe);
+  };
+  const total = t.ventas.reduce((s, r) => s + r.importe, 0);
+  const sales = new Set(t.ventas.map((r) => r.venta)).size;
+  const lines = [
+    `Total sold: ${money(total)} in ${sales} sales (${t.ventas.reduce((s, r) => s + r.cantidad, 0)} dishes).`,
+    `Per dish (highest first): ${group("platillo").map(([k, v]) => `${k} ${money(v.importe)} (${v.cantidad} sold)`).join("; ") || "none"}.`,
+    `Per payment method: ${group("metodo").map(([k, v]) => `${k} ${money(v.importe)}`).join("; ") || "none"}. PayPal means reservations paid ahead.`,
+    `Per hour: ${group("horaDelDia").sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `${k} ${money(v.importe)}`).join("; ") || "none"}.`,
+    `Ingredients left (lowest share first): ${[...t.inventario]
+      .sort((a, b) => b.usadoPct - a.usadoPct)
+      .map((r) => `${r.ingrediente} ${r.queda} ${r.unidad} left of ${r.inicial} (${Math.round(r.usadoPct * 100)}% used)`)
+      .join("; ") || "none"}.`,
+    `Reservations: ${t.apartados.length ? t.apartados.map((r) => `${r.cliente} ${r.estado} ${money(r.importe)}`).join("; ") : "none today"}.`,
+  ];
+  return lines.join("\n").slice(0, 6000);
+}

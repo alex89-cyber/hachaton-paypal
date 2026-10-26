@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { demoDbIds, demoIngredients, demoSeedSales } from "../demo-data";
+import { DEMO_OPENED_MINUTES_AGO, demoDbIds, demoIngredients, demoSeedSales } from "../demo-data";
 import type { Dish, Ingredient } from "../inventory";
 import { cashUp, type PaymentMethod, type Reservation, type ReservationStatus, type Sale, type StallState } from "../stall";
 import type { RedeemResult, ReserveResult, SaleResult, StallStore, Watch } from "./types";
@@ -263,7 +263,7 @@ export const supabaseStore: StallStore = {
     check(
       await db()
         .from("days")
-        .update({ opened_at: new Date(now - 90 * 60_000).toISOString() })
+        .update({ opened_at: new Date(now - DEMO_OPENED_MINUTES_AGO * 60_000).toISOString() })
         .eq("business_id", b.id)
         .is("closed_at", null),
       "seed day",

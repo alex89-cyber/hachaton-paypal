@@ -81,11 +81,17 @@ export const demoDbIds = {
 
 export type SeedSale = { dishId: string; qty: number; method: "cash" | "card"; minutesAgo: number };
 
-/** A morning of sales for the demo: one small order every ~3 minutes, heavier on quesabirrias. */
+/** The demo day opened this long ago, so the seeded sales span lunch. */
+export const DEMO_OPENED_MINUTES_AGO = 245;
+
+/**
+ * A day of sales for the demo: slow late morning, a lunch rush (an order every
+ * ~4 minutes), then calmer again. Heavier on quesabirrias.
+ */
 export function demoSeedSales(): SeedSale[] {
   const pattern = ["quesabirria", "birria-plato", "quesabirria", "tacos-dorados", "consome-vaso", "quesabirria"];
   const out: SeedSale[] = [];
-  for (let m = 85, k = 0; m > 0; m -= 3, k++) {
+  for (let m = DEMO_OPENED_MINUTES_AGO - 5, k = 0; m > 0; m -= m > 150 ? 11 : m > 60 ? 4 : 8, k++) {
     out.push({
       dishId: pattern[k % pattern.length],
       qty: k % 4 === 0 ? 2 : 1,

@@ -21,7 +21,7 @@ export type StockRow = {
   inicial: number;
   usado: number;
   queda: number;
-  usadoPct: number; // 0..1
+  usadoPct: number; // 0..100, whole percent
 };
 
 export type ReservationRow = {
@@ -82,7 +82,7 @@ export function cashUpTables(s: StallState, lang: "es" | "en"): CashUpTables {
       inicial,
       usado: u.used,
       queda: u.left,
-      usadoPct: inicial > 0 ? u.used / inicial : 0,
+      usadoPct: inicial > 0 ? Math.round((u.used / inicial) * 100) : 0,
     };
   });
 

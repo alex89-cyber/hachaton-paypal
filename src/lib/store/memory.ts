@@ -1,4 +1,4 @@
-import { demoDishes, demoIngredients, demoSeedSales } from "../demo-data";
+import { DEMO_OPENED_MINUTES_AGO, demoDishes, demoIngredients, demoSeedSales } from "../demo-data";
 import { canFulfill, deduct, orderTotalCents, restore } from "../inventory";
 import { cashUp, isActive, type Reservation, type Sale, type StallState, type StampCard } from "../stall";
 import type { StallStore, Watch } from "./types";
@@ -10,7 +10,7 @@ const DEMO_SLUG = "birria-dona-lupe";
 
 /** A stall that opened 90 minutes ago and has been selling, so the forecast has data. */
 export function seedDemo(now = new Date()): StallState {
-  const openedAt = new Date(now.getTime() - 90 * 60_000);
+  const openedAt = new Date(now.getTime() - DEMO_OPENED_MINUTES_AGO * 60_000);
   const sales: Sale[] = [];
   let ingredients = demoIngredients.map((i) => ({ ...i }));
   demoSeedSales().forEach((seed, k) => {

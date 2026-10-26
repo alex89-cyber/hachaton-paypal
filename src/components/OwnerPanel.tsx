@@ -144,12 +144,6 @@ export function OwnerPanel({
             <span className={`size-2 rounded-full ${view.isOpen ? "bg-ok" : "bg-bad"}`} />
             {view.isOpen ? t.open : t.closed}
           </span>
-          <Link href={`/${lang}/${view.slug}`} target="_blank" className="text-sm text-brand underline">
-            {o.publicPage}
-          </Link>
-          <Link href={`/${lang}/panel/${view.slug}/corte`} className="text-sm text-brand underline">
-            {o.studioLink}
-          </Link>
           <span className="flex-1" />
           {view.isOpen && (
             <button
@@ -176,6 +170,14 @@ export function OwnerPanel({
               {o.openDay}
             </button>
           )}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          <Link href={`/${lang}/${view.slug}`} target="_blank" className="text-sm text-brand underline">
+            {o.publicPage}
+          </Link>
+          <Link href={`/${lang}/panel/${view.slug}/corte`} className="text-sm font-semibold text-brand underline">
+            {o.studioLink}
+          </Link>
         </div>
       </header>
 

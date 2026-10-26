@@ -26,6 +26,8 @@ const L = {
     usado: "Usado",
     queda: "Queda",
     usadoPct: "% usado",
+    yes: "Sí",
+    no: "No",
     cliente: "Cliente",
     estado: "Estado",
     platillos: "Platillos",
@@ -39,7 +41,7 @@ const L = {
     byHour: "¿A qué hora vendo más?",
     byMethod: "Forma de pago",
     stock: "Inventario del día",
-    stockSub: "Usado y lo que queda, por ingrediente",
+    stockSub: "Cuánto llevo usado de cada ingrediente",
     ticket: "Ticket del corte",
     sales: "Detalle de ventas",
     describe:
@@ -63,6 +65,8 @@ const L = {
     usado: "Used",
     queda: "Left",
     usadoPct: "% used",
+    yes: "Yes",
+    no: "No",
     cliente: "Customer",
     estado: "Status",
     platillos: "Dishes",
@@ -76,7 +80,7 @@ const L = {
     byHour: "When do I sell the most?",
     byMethod: "Payment method",
     stock: "Today's inventory",
-    stockSub: "Used and left, per ingredient",
+    stockSub: "How much of each ingredient is used up",
     ticket: "Cash-up receipt",
     sales: "Sales detail",
     describe:
@@ -88,7 +92,6 @@ export function dataSources(t: CashUpTables, lang: Lang): AgDataSourcesDefinitio
   const l = L[lang];
   const locale = lang === "es" ? "es-MX" : "en-US";
   const money = { format: new Intl.NumberFormat(locale, { style: "currency", currency: t.currency, maximumFractionDigits: 0 }) };
-  const pct = { format: new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }) };
   const time = { format: new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: t.timezone }) };
   return {
     description: l.describe,
@@ -106,7 +109,12 @@ export function dataSources(t: CashUpTables, lang: Lang): AgDataSourcesDefinitio
           { id: "platillo", name: l.platillo, format: "textFormat", cardinality: "low" },
           { id: "cantidad", name: l.cantidad, format: "integerFormat" },
           { id: "importe", name: l.importe, format: "currencyFormat", formatOptions: money },
-          { id: "apartado", name: l.apartado, format: "booleanFormat" },
+          {
+            id: "apartado",
+            name: l.apartado,
+            format: "booleanFormat",
+            createValueFormatter: () => (v: unknown) => (v ? l.yes : l.no),
+          },
         ],
       },
       {
@@ -120,7 +128,13 @@ export function dataSources(t: CashUpTables, lang: Lang): AgDataSourcesDefinitio
           { id: "inicial", name: l.inicial, format: "decimalFormat" },
           { id: "usado", name: l.usado, format: "decimalFormat" },
           { id: "queda", name: l.queda, format: "decimalFormat" },
-          { id: "usadoPct", name: l.usadoPct, format: "percentageFormat", formatOptions: pct },
+          {
+            id: "usadoPct",
+            name: l.usadoPct,
+            // Whole numbers (0-100) so chart axes read 20, 40… instead of 0.2.
+            format: "integerFormat",
+            createValueFormatter: () => (v: unknown) => `${Math.round(Number(v ?? 0))}%`,
+          },
         ],
       },
       {
@@ -186,15 +200,18 @@ export function initialReport(lang: Lang): AgReportState {
       dataMapping: { categoryKey: [{ id: "ventas.metodo" }], valueKey: [importe] },
     },
     stock: {
-      type: "bar-chart-stacked",
+      // As a share used: grams, millilitres and pieces don't fit one axis.
+      type: "bar-chart-grouped",
       format: title(l.stock, l.stockSub),
       dataMapping: {
         categoryKey: [{ id: "inventario.ingrediente" }],
-        valueKey: [
+        valueKey: [{ id: "inventario.usadoPct", aggregation: "sum" }],
+        tooltipKey: [
           { id: "inventario.usado", aggregation: "sum" },
           { id: "inventario.queda", aggregation: "sum" },
         ],
       },
+      sort: [{ field: { id: "inventario.usadoPct", aggregation: "sum" }, direction: "desc" }],
     },
     detail: {
       type: "grid",
@@ -223,8 +240,8 @@ export function initialReport(lang: Lang): AgReportState {
     ticket: at(16, 10, 8, 18),
     byHour: at(0, 28, 16, 18),
     byMethod: at(16, 28, 8, 18),
-    stock: at(0, 46, 24, 18),
-    detail: at(0, 64, 24, 22),
+    stock: at(0, 46, 24, 16),
+    detail: at(0, 62, 24, 22),
   };
   return {
     pages: [{ id: "corte", widgets, widgetLayout }],
@@ -261,7 +278,7 @@ export function cashUpFacts(t: CashUpTables): string {
     `Per hour: ${group("horaDelDia").sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `${k} ${money(v.importe)}`).join("; ") || "none"}.`,
     `Ingredients left (lowest share first): ${[...t.inventario]
       .sort((a, b) => b.usadoPct - a.usadoPct)
-      .map((r) => `${r.ingrediente} ${r.queda} ${r.unidad} left of ${r.inicial} (${Math.round(r.usadoPct * 100)}% used)`)
+      .map((r) => `${r.ingrediente} ${r.queda} ${r.unidad} left of ${r.inicial} (${r.usadoPct}% used)`)
       .join("; ") || "none"}.`,
     `Reservations: ${t.apartados.length ? t.apartados.map((r) => `${r.cliente} ${r.estado} ${money(r.importe)}`).join("; ") : "none today"}.`,
   ];

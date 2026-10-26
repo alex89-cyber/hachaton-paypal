@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { OwnerPanel } from "@/components/OwnerPanel";
 import { getDictionary, hasLocale } from "@/dictionaries";
 import { ownerView } from "@/lib/stall";
-import { store } from "@/lib/store";
+import { loadStall } from "@/lib/reservations";
 
 export default function PanelPage({ params }: PageProps<"/[lang]/panel/[slug]">) {
   return (
@@ -20,7 +20,7 @@ async function Panel({ params }: { params: PageProps<"/[lang]/panel/[slug]">["pa
   const { lang, slug } = await params;
   if (!hasLocale(lang)) notFound();
   await connection();
-  const state = await store.get(slug);
+  const state = await loadStall(slug);
   if (!state) notFound();
   const t = await getDictionary(lang);
   return <OwnerPanel initial={ownerView(state)} lang={lang} timezone={state.timezone} t={t} />;

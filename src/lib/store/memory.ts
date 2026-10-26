@@ -1,6 +1,6 @@
 import { demoDishes, demoIngredients, demoSeedSales } from "../demo-data";
-import { canFulfill, deduct, orderTotalCents } from "../inventory";
-import { cashUp, type Sale, type StallState } from "../stall";
+import { canFulfill, deduct, orderTotalCents, restore } from "../inventory";
+import { cashUp, isActive, type Reservation, type Sale, type StallState } from "../stall";
 import type { StallStore } from "./types";
 
 // In-process store for the demo and for running without Supabase. State lives
@@ -36,6 +36,8 @@ export function seedDemo(now = new Date()): StallState {
     ingredients,
     openingCount: Object.fromEntries(demoIngredients.map((i) => [i.id, i.stock])),
     sales,
+    holdMinutes: 45,
+    reservations: [],
   };
 }
 
@@ -46,6 +48,10 @@ function must(slug: string): StallState {
   const s = stalls.get(slug);
   if (!s) throw new Error(`Unknown stall ${slug}`);
   return s;
+}
+
+function reservation(s: StallState, id: string): Reservation | undefined {
+  return s.reservations.find((r) => r.id === id);
 }
 
 function save(s: StallState): StallState {
@@ -102,5 +108,66 @@ export const memoryStore: StallStore = {
   async reset(slug) {
     if (slug !== DEMO_SLUG) return must(slug);
     return save(seedDemo());
+  },
+
+  async reserve(slug, customerName, lines, pickupBy) {
+    const s = must(slug);
+    if (!s.isOpen) return { ok: false, reason: "closed" };
+    const check = canFulfill(lines, s.dishes, s.ingredients);
+    if (!check.ok) return { ok: false, reason: "short", short: check.shortIngredientIds };
+    s.ingredients = deduct(lines, s.dishes, s.ingredients);
+    const r: Reservation = {
+      id: crypto.randomUUID(),
+      customerName,
+      lines,
+      totalCents: orderTotalCents(lines, s.dishes),
+      status: "held",
+      pickupBy: pickupBy.toISOString(),
+      createdAt: new Date().toISOString(),
+      paypalOrderId: null,
+      paypalAuthorizationId: null,
+    };
+    s.reservations.push(r);
+    save(s);
+    return { ok: true, reservation: { ...r } };
+  },
+
+  async getReservation(slug, id) {
+    const r = reservation(must(slug), id);
+    return r ? { ...r } : null;
+  },
+
+  async setPayPalOrder(slug, id, orderId) {
+    const r = reservation(must(slug), id);
+    if (r) r.paypalOrderId = orderId;
+  },
+
+  async markAuthorized(slug, id, authorizationId) {
+    const s = must(slug);
+    const r = reservation(s, id);
+    if (r?.status !== "held") return;
+    r.status = "authorized";
+    r.paypalAuthorizationId = authorizationId;
+    save(s);
+  },
+
+  async markDelivered(slug, id) {
+    const s = must(slug);
+    const r = reservation(s, id);
+    if (r?.status !== "authorized") return false;
+    r.status = "captured";
+    s.sales.push({ id: crypto.randomUUID(), lines: r.lines, method: "paypal", totalCents: r.totalCents, at: new Date().toISOString() });
+    save(s);
+    return true;
+  },
+
+  async release(slug, id, status) {
+    const s = must(slug);
+    const r = reservation(s, id);
+    if (!r || !isActive(r)) return false;
+    r.status = status;
+    s.ingredients = restore(r.lines, s.dishes, s.ingredients);
+    save(s);
+    return true;
   },
 };

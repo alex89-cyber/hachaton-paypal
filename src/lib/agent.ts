@@ -1,0 +1,131 @@
+import "server-only";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { generateText, isStepCount, tool } from "ai";
+import { z } from "zod";
+import { menuAvailability } from "./inventory";
+import { startReservation } from "./reservations";
+import type { StallState } from "./stall";
+
+// The "¿Todavía hay?" agent on the public page. It answers from the live menu
+// and, once the customer confirms, reserves through PayPal: the money is held
+// now and only charged when the owner hands the order over.
+
+export type ChatMessage = { role: "user" | "assistant"; content: string };
+
+export type AgentReservation = {
+  id: string;
+  approveUrl: string;
+  totalCents: number;
+  pickupBy: string;
+  lines: { name: string; qty: number }[];
+};
+
+export type AgentReply = { reply: string; reservation?: AgentReservation };
+
+// GOOGLE_GENERATIVE_AI_BASE_URL only points local tests at a fake Gemini.
+const google = createGoogleGenerativeAI({ baseURL: process.env.GOOGLE_GENERATIVE_AI_BASE_URL || undefined });
+const model = () => google(process.env.GEMINI_MODEL ?? "gemini-flash-latest");
+
+export const agentAvailable = () => Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+
+function clock(iso: string | Date, s: StallState, lang: "es" | "en") {
+  return new Intl.DateTimeFormat(lang === "es" ? "es-MX" : "en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: s.timezone,
+  }).format(new Date(iso));
+}
+
+function instructions(s: StallState, lang: "es" | "en") {
+  const left = new Map(menuAvailability(s.dishes, s.ingredients).map((a) => [a.dishId, a.portions]));
+  const menu = s.dishes
+    .map((d) => {
+      const n = s.isOpen ? (left.get(d.id) ?? 0) : 0;
+      return `- id=${d.id} | ${d.nameEs} / ${d.nameEn} | $${(d.priceCents / 100).toFixed(2)} ${s.currency} | ${
+        n > 0 ? `about ${n} left` : "SOLD OUT"
+      }`;
+    })
+    .join("\n");
+
+  return `You are the order assistant of "${s.name}", a street food stall. Customers write to ask "¿todavía hay?" (is there still...?) and to reserve food for pickup.
+
+Live state right now (${clock(new Date(), s, lang)} local time):
+- The stall is ${s.isOpen ? "OPEN" : "CLOSED"}.
+- Menu:
+${menu}
+
+Rules:
+- Answer only from the live state above. Never invent dishes, prices or availability. Portion counts are estimates: say "unos 12" / "about 12", never promise an exact number.
+- If the stall is closed or a dish is sold out, say so plainly and suggest what is still available.
+- Reserving: you need the dishes, quantities (max 10 per dish) and the customer's first name. Before reserving, summarize the order with its total and tell them they must pick it up within ${s.holdMinutes} minutes. Ask them to confirm. Only call reserve_order after they clearly say yes.
+- How payment works, if they ask or when you summarize: PayPal holds the money now and the stall only charges it when they pick up. If they do not arrive in time, the hold is released and nothing is charged. They can pay with a PayPal account or a card.
+- After reserve_order succeeds, tell them to tap the PayPal button that appears below your message to finish. Never write links or URLs.
+- If reserve_order fails, explain why in one sentence and offer an alternative.
+- Reply in the customer's language (default ${lang === "es" ? "Mexican Spanish" : "English"}). Be warm and brief: one to three short sentences, no markdown, at most one emoji.
+- If asked about anything unrelated to the stall, steer back to the menu politely.`;
+}
+
+export async function chat(
+  s: StallState,
+  messages: ChatMessage[],
+  ctx: { lang: "es" | "en"; origin: string },
+): Promise<AgentReply> {
+  const ids = s.dishes.map((d) => d.id) as [string, ...string[]];
+  let reservation: AgentReservation | undefined;
+
+  const reserveOrder = tool({
+    description:
+      "Reserve dishes for pickup. Takes the stock now and creates a PayPal payment the customer approves with a button. Call only after the customer confirmed the order.",
+    inputSchema: z.object({
+      customerName: z.string().min(1).max(60).describe("Customer's first name, for the pickup"),
+      items: z
+        .array(z.object({ dishId: z.enum(ids), qty: z.number().int().min(1).max(10) }))
+        .min(1)
+        .max(8),
+    }),
+    execute: async ({ customerName, items }) => {
+      if (reservation) return { ok: false, error: "A reservation was already created in this message." };
+      const res = await startReservation(s, {
+        customerName,
+        lines: items.map((i) => ({ dishId: i.dishId, qty: i.qty })),
+        origin: ctx.origin,
+        lang: ctx.lang,
+      });
+      if (!res.ok) {
+        const why = {
+          closed: "The stall is closed.",
+          short: "Not enough left for that order.",
+          payment: "PayPal is not responding right now.",
+        }[res.reason];
+        return { ok: false, error: why };
+      }
+      const name = new Map(s.dishes.map((d) => [d.id, ctx.lang === "es" ? d.nameEs : d.nameEn]));
+      reservation = {
+        id: res.reservation.id,
+        approveUrl: res.approveUrl,
+        totalCents: res.reservation.totalCents,
+        pickupBy: res.reservation.pickupBy,
+        lines: res.reservation.lines.map((l) => ({ name: name.get(l.dishId) ?? l.dishId, qty: l.qty })),
+      };
+      return {
+        ok: true,
+        total: `$${(reservation.totalCents / 100).toFixed(2)} ${s.currency}`,
+        pickUpBefore: clock(reservation.pickupBy, s, ctx.lang),
+        next: "The customer must tap the PayPal button shown under your reply to confirm.",
+      };
+    },
+  });
+
+  const result = await generateText({
+    model: model(),
+    instructions: instructions(s, ctx.lang),
+    messages,
+    tools: s.isOpen ? { reserve_order: reserveOrder } : {},
+    stopWhen: isStepCount(3),
+    temperature: 0.3,
+    maxOutputTokens: 400,
+  });
+
+  const reply = result.text.trim();
+  return { reply: reply || (ctx.lang === "es" ? "¿Me lo repites, por favor?" : "Could you say that again?"), reservation };
+}

@@ -2,8 +2,8 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { demoDbIds, demoIngredients, demoSeedSales } from "../demo-data";
 import type { Dish, Ingredient } from "../inventory";
-import { cashUp, type PaymentMethod, type Sale, type StallState } from "../stall";
-import type { SaleResult, StallStore } from "./types";
+import { cashUp, type PaymentMethod, type Reservation, type ReservationStatus, type Sale, type StallState } from "../stall";
+import type { ReserveResult, SaleResult, StallStore } from "./types";
 
 // Supabase-backed store. Runs on the server with the secret key; stock moves go
 // through the SQL functions in supabase/migrations so they stay atomic.
@@ -28,15 +28,54 @@ type BusinessRow = {
   currency: string;
   timezone: string;
   is_open: boolean;
+  hold_minutes: number;
   updated_at: string;
 };
+
+type ReservationRow = {
+  id: string;
+  customer_name: string;
+  total_cents: number;
+  status: ReservationStatus;
+  pickup_by: string;
+  created_at: string;
+  paypal_order_id: string | null;
+  paypal_authorization_id: string | null;
+  reservation_items: { dish_id: string; qty: number }[];
+};
+
+const RESERVATION_COLS =
+  "id, customer_name, total_cents, status, pickup_by, created_at, paypal_order_id, paypal_authorization_id, reservation_items(dish_id, qty)";
+
+const toReservation = (r: ReservationRow): Reservation => ({
+  id: r.id,
+  customerName: r.customer_name,
+  totalCents: r.total_cents,
+  status: r.status,
+  pickupBy: new Date(r.pickup_by).toISOString(),
+  createdAt: new Date(r.created_at).toISOString(),
+  paypalOrderId: r.paypal_order_id,
+  paypalAuthorizationId: r.paypal_authorization_id,
+  lines: r.reservation_items.map((l) => ({ dishId: l.dish_id, qty: l.qty })),
+});
+
+/** Maps the stock functions' errors to the reasons the screens understand. */
+function stockError(error: { message: string; details?: string }): { reason: "closed" | "short"; short: string[] } | null {
+  if (error.message.includes("closed")) return { reason: "closed", short: [] };
+  if (error.message.includes("insufficient_stock")) {
+    const detail = error.details ?? "";
+    return { reason: "short", short: detail && detail !== "sold_out" ? detail.split(",") : [] };
+  }
+  return null;
+}
 
 async function businessBySlug(slug: string): Promise<BusinessRow | null> {
   return check(await db().from("businesses").select("*").eq("slug", slug).maybeSingle(), "business");
 }
 
 async function load(b: BusinessRow): Promise<StallState> {
-  const [ingRes, dishRes, dayRes] = await Promise.all([
+  const recent = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const [ingRes, dishRes, dayRes, resRes] = await Promise.all([
     db().from("ingredients").select("id, name, unit, stock").eq("business_id", b.id).order("name"),
     db()
       .from("dishes")
@@ -51,7 +90,9 @@ async function load(b: BusinessRow): Promise<StallState> {
       .order("opened_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    db().from("reservations").select(RESERVATION_COLS).eq("business_id", b.id).gte("created_at", recent).order("created_at"),
   ]);
+  const reservations = ((check(resRes, "reservations") ?? []) as ReservationRow[]).map(toReservation);
 
   const ingredients: Ingredient[] = (check(ingRes, "ingredients") ?? []).map((i) => ({
     id: i.id,
@@ -103,6 +144,8 @@ async function load(b: BusinessRow): Promise<StallState> {
     ingredients,
     openingCount: Object.fromEntries(Object.entries(day?.opening_count ?? {}).map(([k, v]) => [k, Number(v)])),
     sales,
+    holdMinutes: b.hold_minutes,
+    reservations,
   };
 }
 
@@ -137,11 +180,8 @@ export const supabaseStore: StallStore = {
     const b = await must(slug);
     const r = await db().rpc("record_sale", { p_business: b.id, p_lines: toDbLines(lines), p_method: method });
     if (r.error) {
-      if (r.error.message.includes("closed")) return { ok: false, reason: "closed" };
-      if (r.error.message.includes("insufficient_stock")) {
-        const detail = (r.error as { details?: string }).details ?? "";
-        return { ok: false, reason: "short", short: detail && detail !== "sold_out" ? detail.split(",") : [] };
-      }
+      const e = stockError(r.error);
+      if (e) return { ok: false, ...e };
       throw new Error(`Supabase record_sale: ${r.error.message}`);
     }
     return { ok: true, state: await load(await must(slug)) };
@@ -161,6 +201,7 @@ export const supabaseStore: StallStore = {
     // Back to the morning of the demo: full stock, opened, then the seeded sales
     // with their timestamps moved into the past so the forecast has a pace.
     check(await db().from("sales").delete().eq("business_id", b.id), "clear sales");
+    check(await db().from("reservations").delete().eq("business_id", b.id), "clear reservations");
     check(await db().from("days").delete().eq("business_id", b.id), "clear days");
     const counts = Object.fromEntries(demoIngredients.map((i) => [demoDbIds.ingredients[i.id], i.stock]));
     check(await db().rpc("open_day", { p_business: b.id, p_counts: counts }), "open_day");
@@ -189,5 +230,65 @@ export const supabaseStore: StallStore = {
       "seed day",
     );
     return load(await must(slug));
+  },
+
+  async reserve(slug, customerName, lines, pickupBy): Promise<ReserveResult> {
+    const b = await must(slug);
+    const r = await db().rpc("reserve", {
+      p_business: b.id,
+      p_customer: customerName,
+      p_lines: toDbLines(lines),
+      p_pickup_by: pickupBy.toISOString(),
+    });
+    if (r.error) {
+      const e = stockError(r.error);
+      if (e) return { ok: false, ...e };
+      throw new Error(`Supabase reserve: ${r.error.message}`);
+    }
+    const created = await this.getReservation(slug, r.data as string);
+    if (!created) throw new Error("Supabase reserve: reservation not found after insert");
+    return { ok: true, reservation: created };
+  },
+
+  async getReservation(slug, id) {
+    const b = await must(slug);
+    const row = check(
+      await db().from("reservations").select(RESERVATION_COLS).eq("id", id).eq("business_id", b.id).maybeSingle(),
+      "reservation",
+    ) as ReservationRow | null;
+    return row ? toReservation(row) : null;
+  },
+
+  async setPayPalOrder(slug, id, orderId) {
+    const b = await must(slug);
+    check(
+      await db().from("reservations").update({ paypal_order_id: orderId }).eq("id", id).eq("business_id", b.id),
+      "set order",
+    );
+  },
+
+  async markAuthorized(slug, id, authorizationId) {
+    const b = await must(slug);
+    check(
+      await db()
+        .from("reservations")
+        .update({ status: "authorized", paypal_authorization_id: authorizationId, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("business_id", b.id)
+        .eq("status", "held"),
+      "authorize",
+    );
+    check(await db().from("businesses").update({ updated_at: new Date().toISOString() }).eq("id", b.id), "touch");
+  },
+
+  async markDelivered(slug, id) {
+    await must(slug);
+    const saleId = check(await db().rpc("deliver_reservation", { p_reservation: id }), "deliver");
+    return saleId != null;
+  },
+
+  async release(slug, id, status) {
+    await must(slug);
+    return Boolean(check(await db().rpc("release_reservation", { p_reservation: id, p_status: status }), "release"));
   },
 };

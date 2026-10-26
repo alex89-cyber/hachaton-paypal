@@ -2,15 +2,34 @@
 
 import { useEffect, useState } from "react";
 import type { Dictionary } from "@/dictionaries";
-import { fill, minutesSince, money } from "@/lib/format";
+import { clock, fill, minutesSince, money } from "@/lib/format";
 import type { PublicSnapshot } from "@/lib/stall";
+import { AgentChat } from "./AgentChat";
+
+/** Shown after PayPal sends the customer back. */
+export type Confirmation =
+  | { kind: "reserved"; name: string; pickupBy: string; totalCents: number }
+  | { kind: "cancelled" }
+  | { kind: "error" };
 
 const POLL_MS = 5_000;
 const FEW = 5;
 
 // RN-07: what the customer sees. Polls the snapshot so a sale or a "se acabó"
 // on the owner's phone shows up here within seconds.
-export function PublicStall({ initial, lang, t }: { initial: PublicSnapshot; lang: string; t: Dictionary }) {
+export function PublicStall({
+  initial,
+  lang,
+  timezone,
+  confirmation,
+  t,
+}: {
+  initial: PublicSnapshot;
+  lang: "es" | "en";
+  timezone: string;
+  confirmation: Confirmation | null;
+  t: Dictionary;
+}) {
   const [snap, setSnap] = useState(initial);
   const [now, setNow] = useState(() => Date.now());
 
@@ -53,6 +72,29 @@ export function PublicStall({ initial, lang, t }: { initial: PublicSnapshot; lan
         </div>
       </header>
 
+      {confirmation && (
+        <div
+          role="status"
+          className={`rounded-2xl p-4 ${confirmation.kind === "reserved" ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn"}`}
+        >
+          {confirmation.kind === "reserved" ? (
+            <>
+              <p className="text-lg font-bold">{fill(t.public.confirmedTitle, { name: confirmation.name })}</p>
+              <p className="text-sm">
+                {fill(t.public.confirmedBody, {
+                  time: clock(confirmation.pickupBy, timezone, lang),
+                  total: money(confirmation.totalCents, snap.currency, lang),
+                })}
+              </p>
+            </>
+          ) : (
+            <p className="font-semibold">
+              {confirmation.kind === "cancelled" ? t.public.cancelledNote : t.public.errorNote}
+            </p>
+          )}
+        </div>
+      )}
+
       {!snap.isOpen ? (
         <p className="rounded-2xl bg-surface p-5 text-muted shadow-sm">{t.closedNote}</p>
       ) : (
@@ -84,7 +126,7 @@ export function PublicStall({ initial, lang, t }: { initial: PublicSnapshot; lan
         </ul>
       )}
 
-      <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">{t.public.askSoon}</p>
+      <AgentChat slug={snap.slug} lang={lang} currency={snap.currency} timezone={timezone} isOpen={snap.isOpen} t={t} />
       <p className="text-center text-xs text-muted">{t.madeWith}</p>
     </div>
   );

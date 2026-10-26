@@ -1,6 +1,8 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { ownerView, publicSnapshot } from "@/lib/stall";
+import { PayPalError } from "@/lib/paypal";
+import { cancel, deliver, loadStall } from "@/lib/reservations";
 import { store } from "@/lib/store";
 
 // GET  /api/stalls/:slug             public snapshot (RN-07)
@@ -12,7 +14,7 @@ import { store } from "@/lib/store";
 export async function GET(request: Request, ctx: RouteContext<"/api/stalls/[slug]">) {
   await connection();
   const { slug } = await ctx.params;
-  const s = await store.get(slug);
+  const s = await loadStall(slug);
   if (!s) return Response.json({ error: "not_found" }, { status: 404 });
   const view = new URL(request.url).searchParams.get("view");
   return Response.json(view === "owner" ? ownerView(s) : publicSnapshot(s), {
@@ -28,6 +30,8 @@ const Action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("open"), counts: z.record(z.string(), z.number().min(0).max(1_000_000)) }),
   z.object({ action: z.literal("close") }),
   z.object({ action: z.literal("reset") }),
+  z.object({ action: z.literal("deliver"), reservationId: z.string().min(1) }),
+  z.object({ action: z.literal("cancelReservation"), reservationId: z.string().min(1) }),
 ]);
 
 export async function POST(request: Request, ctx: RouteContext<"/api/stalls/[slug]">) {
@@ -54,5 +58,20 @@ export async function POST(request: Request, ctx: RouteContext<"/api/stalls/[slu
     }
     case "reset":
       return Response.json(ownerView(await store.reset(slug)));
+    case "deliver":
+    case "cancelReservation": {
+      try {
+        if (a.action === "deliver") {
+          const r = await deliver(slug, a.reservationId);
+          if (r !== "ok") return Response.json({ error: r }, { status: 409 });
+        } else {
+          await cancel(slug, a.reservationId);
+        }
+      } catch (e) {
+        console.error(`${a.action} failed`, e);
+        return Response.json({ error: e instanceof PayPalError ? "paypal" : "failed" }, { status: 502 });
+      }
+      return Response.json(ownerView((await store.get(slug))!));
+    }
   }
 }

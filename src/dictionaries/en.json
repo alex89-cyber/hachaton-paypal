@@ -13,7 +13,24 @@
   "closedNote": "Closed right now. Check back later.",
   "madeWith": "Made with ¿Todavía hay?",
   "public": {
-    "askSoon": "Soon you'll be able to ask and reserve here with PayPal."
+    "askTitle": "Ask if there's still some",
+    "askPlaceholder": "Any quesabirrias left?",
+    "askHint": "Reserve here and pay with PayPal. You're only charged at pickup.",
+    "suggestions": [
+      "Any birria left?",
+      "Save me 3 quesabirrias",
+      "How does payment work?"
+    ],
+    "send": "Send",
+    "thinking": "Typing…",
+    "agentError": "I couldn't answer. Please try again.",
+    "agentOff": "The assistant isn't available right now.",
+    "payWithPayPal": "Confirm with PayPal",
+    "reservedSummary": "Reserved: {items} · {total} · pick up before {time}",
+    "confirmedTitle": "All set, {name}! Your order is reserved",
+    "confirmedBody": "PayPal holds {total} and you're only charged when it's handed to you. Pick it up before {time}",
+    "cancelledNote": "You cancelled the payment. Nothing was reserved or charged.",
+    "errorNote": "We couldn't confirm your reservation. You weren't charged; please try again."
   },
   "owner": {
     "title": "Panel",
@@ -45,6 +62,20 @@
     "leftOver": "{n} left",
     "done": "Done",
     "reset": "Reset demo",
-    "demoNote": "Demo: data lives on the server and resets when it restarts."
+    "demoNote": "Demo: data lives on the server and resets when it restarts.",
+    "reservations": "Reservations",
+    "awaitingPayment": "Waiting for PayPal payment",
+    "paidHeld": "Payment held · pickup before {time}",
+    "deliver": "Delivered",
+    "delivered": "Delivered and charged with PayPal",
+    "reservationCancelled": "Reservation cancelled, no charge",
+    "paypalError": "PayPal didn't respond. Try again.",
+    "reservationStatus": {
+      "held": "awaiting payment",
+      "authorized": "paid",
+      "captured": "delivered",
+      "voided": "cancelled",
+      "expired": "expired"
+    }
   }
 }

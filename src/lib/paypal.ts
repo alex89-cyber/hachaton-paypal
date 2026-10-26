@@ -6,8 +6,10 @@ import "server-only";
 // The Agent Toolkit creates and pays orders but has no authorization
 // capture/void, so this goes straight to the REST API.
 
+// PAYPAL_API_BASE only points local tests at a fake PayPal.
 const BASE =
-  process.env.PAYPAL_ENV === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+  process.env.PAYPAL_API_BASE ??
+  (process.env.PAYPAL_ENV === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com");
 
 let cached: { token: string; expiresAt: number } | null = null;
 

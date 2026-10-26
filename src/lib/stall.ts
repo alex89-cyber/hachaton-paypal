@@ -14,6 +14,27 @@ export type Sale = {
   at: string; // ISO
 };
 
+/**
+ * held: stock set aside, waiting for the customer to approve on PayPal.
+ * authorized: PayPal holds the money until pickup. captured: delivered and charged.
+ * voided / expired: stock went back, nothing charged.
+ */
+export type ReservationStatus = "held" | "authorized" | "captured" | "voided" | "expired";
+
+export type Reservation = {
+  id: string;
+  customerName: string;
+  lines: OrderLine[];
+  totalCents: number;
+  status: ReservationStatus;
+  pickupBy: string; // ISO
+  createdAt: string; // ISO
+  paypalOrderId: string | null;
+  paypalAuthorizationId: string | null;
+};
+
+export const isActive = (r: Reservation) => r.status === "held" || r.status === "authorized";
+
 export type StallState = {
   slug: string;
   name: string;
@@ -28,6 +49,10 @@ export type StallState = {
   openingCount: Record<string, number>;
   /** Sales since the last opening. */
   sales: Sale[];
+  /** How long a reservation waits for pickup. */
+  holdMinutes: number;
+  /** Active reservations plus recent finished ones. */
+  reservations: Reservation[];
 };
 
 export type PublicDish = {
@@ -82,6 +107,7 @@ export type OwnerView = {
   dishes: OwnerDish[];
   ingredients: Ingredient[];
   today: CashUp;
+  reservations: Reservation[];
 };
 
 export function ownerView(s: StallState, now = new Date()): OwnerView {
@@ -101,6 +127,9 @@ export function ownerView(s: StallState, now = new Date()): OwnerView {
     updatedAt: s.updatedAt,
     ingredients: s.ingredients,
     today: cashUp(s),
+    reservations: [...s.reservations].sort(
+      (a, b) => Number(isActive(b)) - Number(isActive(a)) || a.pickupBy.localeCompare(b.pickupBy),
+    ),
     dishes: s.dishes.map((d) => {
       const a = avail.get(d.id);
       const f = fc.get(d.id);

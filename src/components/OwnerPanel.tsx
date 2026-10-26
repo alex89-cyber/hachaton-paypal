@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Dictionary } from "@/dictionaries";
 import { clock, fill, money, qty } from "@/lib/format";
-import type { CashUp, OwnerView } from "@/lib/stall";
+import type { CashUp, OwnerView, Reservation } from "@/lib/stall";
 
 type Ticket = Record<string, number>;
 type Toast = { kind: "ok" | "bad"; text: string } | null;
@@ -144,6 +144,25 @@ export function OwnerPanel({
           )}
         </div>
       </header>
+
+      <Reservations
+        view={view}
+        t={t}
+        lang={lang}
+        timezone={timezone}
+        fmt={fmt}
+        busy={busy}
+        onDeliver={async (id) => {
+          const r = await act({ action: "deliver", reservationId: id });
+          if (r?.error) setToast({ kind: "bad", text: o.paypalError });
+          else if (r) setToast({ kind: "ok", text: o.delivered });
+        }}
+        onCancel={async (id) => {
+          const r = await act({ action: "cancelReservation", reservationId: id });
+          if (r?.error) setToast({ kind: "bad", text: o.paypalError });
+          else if (r) setToast({ kind: "ok", text: o.reservationCancelled });
+        }}
+      />
 
       <section className="grid grid-cols-2 gap-3 p-4">
         {view.dishes.map((d) => {
@@ -410,5 +429,80 @@ function CashUpDialog({
         {o.done}
       </button>
     </Sheet>
+  );
+}
+
+function Reservations({
+  view,
+  t,
+  lang,
+  timezone,
+  fmt,
+  busy,
+  onDeliver,
+  onCancel,
+}: {
+  view: OwnerView;
+  t: Dictionary;
+  lang: string;
+  timezone: string;
+  fmt: (c: number) => string;
+  busy: boolean;
+  onDeliver: (id: string) => void;
+  onCancel: (id: string) => void;
+}) {
+  const o = t.owner;
+  const active = view.reservations.filter((r) => r.status === "held" || r.status === "authorized");
+  const done = view.reservations.filter((r) => r.status !== "held" && r.status !== "authorized").slice(-3).reverse();
+  if (active.length === 0 && done.length === 0) return null;
+  const dish = new Map(view.dishes.map((d) => [d.id, lang === "es" ? d.nameEs : d.nameEn]));
+  const items = (r: Reservation) => r.lines.map((l) => `${l.qty} × ${dish.get(l.dishId) ?? l.dishId}`).join(", ");
+
+  return (
+    <section className="flex flex-col gap-2 px-4 pt-4">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+        {o.reservations} {active.length > 0 && <span className="text-brand">· {active.length}</span>}
+      </h2>
+      {active.map((r) => (
+        <article key={r.id} className="rounded-2xl border-2 border-brand/30 bg-surface p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-lg font-bold">{r.customerName}</p>
+              <p className="text-sm">{items(r)}</p>
+            </div>
+            <p className="shrink-0 text-lg font-bold tabular-nums">{fmt(r.totalCents)}</p>
+          </div>
+          <p className={`mt-2 text-sm font-semibold ${r.status === "authorized" ? "text-ok" : "text-warn"}`}>
+            {r.status === "authorized"
+              ? fill(o.paidHeld, { time: clock(r.pickupBy, timezone, lang) })
+              : o.awaitingPayment}
+          </p>
+          <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+            <button
+              onClick={() => onDeliver(r.id)}
+              disabled={busy || r.status !== "authorized"}
+              className="rounded-xl bg-ok py-3 font-bold text-white active:scale-[0.98] disabled:opacity-40"
+            >
+              {o.deliver}
+            </button>
+            <button
+              onClick={() => onCancel(r.id)}
+              disabled={busy}
+              className="rounded-xl border border-line px-4 py-3 font-semibold active:scale-[0.98] disabled:opacity-40"
+            >
+              {o.cancel}
+            </button>
+          </div>
+        </article>
+      ))}
+      {done.map((r) => (
+        <p key={r.id} className="flex justify-between gap-3 px-1 text-sm text-muted">
+          <span className="truncate">
+            {r.customerName} · {items(r)}
+          </span>
+          <span className="shrink-0">{o.reservationStatus[r.status]}</span>
+        </p>
+      ))}
+    </section>
   );
 }

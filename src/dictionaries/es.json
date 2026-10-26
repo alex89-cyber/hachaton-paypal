@@ -13,7 +13,24 @@
   "closedNote": "Ahorita está cerrado. Vuelve a revisar más tarde.",
   "madeWith": "Hecho con ¿Todavía hay?",
   "public": {
-    "askSoon": "Pronto podrás preguntar y apartar desde aquí con PayPal."
+    "askTitle": "Pregunta si todavía hay",
+    "askPlaceholder": "¿Todavía hay quesabirrias?",
+    "askHint": "Aparta aquí y paga con PayPal. Solo se te cobra cuando recoges.",
+    "suggestions": [
+      "¿Todavía hay birria?",
+      "Apártame 3 quesabirrias",
+      "¿Cómo funciona el pago?"
+    ],
+    "send": "Enviar",
+    "thinking": "Escribiendo…",
+    "agentError": "No pude responder. Intenta otra vez.",
+    "agentOff": "El asistente no está disponible ahorita.",
+    "payWithPayPal": "Confirmar con PayPal",
+    "reservedSummary": "Apartado: {items} · {total} · recoge antes de las {time}",
+    "confirmedTitle": "¡Listo, {name}! Tu pedido está apartado",
+    "confirmedBody": "PayPal retiene {total} y solo se cobra cuando te lo entregan. Recógelo antes de las {time}",
+    "cancelledNote": "Cancelaste el pago. No se apartó nada ni se cobró nada.",
+    "errorNote": "No pudimos confirmar tu apartado. No se te cobró nada; intenta de nuevo."
   },
   "owner": {
     "title": "Panel",
@@ -45,6 +62,20 @@
     "leftOver": "sobra {n}",
     "done": "Listo",
     "reset": "Reiniciar demo",
-    "demoNote": "Demo: los datos se guardan en el servidor y se reinician al reiniciarlo."
+    "demoNote": "Demo: los datos se guardan en el servidor y se reinician al reiniciarlo.",
+    "reservations": "Apartados",
+    "awaitingPayment": "Esperando que pague en PayPal",
+    "paidHeld": "Pago retenido · recoge antes de las {time}",
+    "deliver": "Entregado",
+    "delivered": "Entregado y cobrado con PayPal",
+    "reservationCancelled": "Apartado cancelado, sin cobro",
+    "paypalError": "PayPal no respondió. Intenta otra vez.",
+    "reservationStatus": {
+      "held": "esperando pago",
+      "authorized": "pagado",
+      "captured": "entregado",
+      "voided": "cancelado",
+      "expired": "vencido"
+    }
   }
 }

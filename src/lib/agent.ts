@@ -1,5 +1,5 @@
 import "server-only";
-import { createGoogleGenerativeAI, type GoogleLanguageModelOptions } from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText, isStepCount, tool } from "ai";
 import { z } from "zod";
 import { menuAvailability } from "./inventory";
@@ -24,7 +24,10 @@ export type AgentReply = { reply: string; reservation?: AgentReservation };
 
 // GOOGLE_GENERATIVE_AI_BASE_URL only points local tests at a fake Gemini.
 const google = createGoogleGenerativeAI({ baseURL: process.env.GOOGLE_GENERATIVE_AI_BASE_URL || undefined });
-const model = () => google(process.env.GEMINI_MODEL ?? "gemini-flash-latest");
+// Flash-Lite answers in under a second with no thinking; the bigger Flash was
+// slow and often "experiencing high demand" on the free tier. If one model
+// fails, the next one is tried.
+const MODELS = [process.env.GEMINI_MODEL || "gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-flash-latest"];
 
 export const agentAvailable = () => Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
 
@@ -118,33 +121,34 @@ export async function chat(
   });
 
   const started = Date.now();
-  const run = (thinking: boolean) =>
+  const run = (modelId: string) =>
     generateText({
-      model: model(),
+      model: google(modelId),
       instructions: instructions(s, ctx.lang),
       messages,
       tools: s.isOpen ? { reserve_order: reserveOrder } : {},
       stopWhen: isStepCount(3),
       temperature: 0.3,
-      // Gemini counts its thinking against this, so a tight cap cut replies off.
+      // Some Gemini models count thinking against this, so keep room.
       maxOutputTokens: 1200,
       // Never leave the customer on "Escribiendo…": give up and say so.
-      maxRetries: 1,
-      abortSignal: AbortSignal.timeout(20_000),
-      // A menu question needs no deep reasoning; thinking was most of the wait.
-      // Not every Gemini model accepts this, so a failure retries without it.
-      providerOptions: thinking
-        ? { google: { thinkingConfig: { thinkingLevel: "minimal" } } satisfies GoogleLanguageModelOptions }
-        : undefined,
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(15_000),
     });
 
-  let result;
-  try {
-    result = await run(true);
-  } catch (e) {
-    console.error(`agent: failed with minimal thinking, retrying without it: ${describe(e)}`);
-    result = await run(false);
+  let result: Awaited<ReturnType<typeof run>> | undefined;
+  let lastError: unknown;
+  for (const modelId of [...new Set(MODELS)]) {
+    try {
+      result = await run(modelId);
+      console.log(`agent: ${modelId}`);
+      break;
+    } catch (e) {
+      lastError = e;
+      console.error(`agent: ${modelId} failed: ${describe(e)}`);
+    }
   }
+  if (!result) throw lastError;
   console.log(`agent: ${result.steps.length} step(s) in ${Date.now() - started} ms`);
 
   const reply = result.text.trim();

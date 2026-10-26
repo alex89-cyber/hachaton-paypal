@@ -126,6 +126,15 @@
     "newCard": "Create card and give the first stamp",
     "noCustomer": "No one found. Type their full phone to create a card.",
     "noCards": "No cards yet. Type a customer's phone to give their first stamp.",
-    "addStamp": "+1 stamp"
+    "addStamp": "+1 stamp",
+    "studioLink": "📊 Cash-up in AG Studio",
+    "studioOpen": "See the full cash-up with charts"
+  },
+  "studio": {
+    "title": "Cash-up",
+    "back": "← Panel",
+    "refresh": "Refresh",
+    "hint": "Move or change any chart, or ask the assistant on the left.",
+    "noAi": "The AI assistant isn't set up."
   }
 }

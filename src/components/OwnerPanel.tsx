@@ -147,6 +147,9 @@ export function OwnerPanel({
           <Link href={`/${lang}/${view.slug}`} target="_blank" className="text-sm text-brand underline">
             {o.publicPage}
           </Link>
+          <Link href={`/${lang}/panel/${view.slug}/corte`} className="text-sm text-brand underline">
+            {o.studioLink}
+          </Link>
           <span className="flex-1" />
           {view.isOpen && (
             <button
@@ -419,7 +422,9 @@ export function OwnerPanel({
         />
       )}
 
-      {cashUp && <CashUpDialog cashUp={cashUp} t={t} lang={lang} fmt={fmt} onDone={() => setCashUp(null)} />}
+      {cashUp && (
+        <CashUpDialog cashUp={cashUp} t={t} lang={lang} slug={view.slug} fmt={fmt} onDone={() => setCashUp(null)} />
+      )}
     </div>
   );
 }
@@ -489,12 +494,14 @@ function CashUpDialog({
   cashUp,
   t,
   lang,
+  slug,
   fmt,
   onDone,
 }: {
   cashUp: CashUp;
   t: Dictionary;
   lang: string;
+  slug: string;
   fmt: (c: number) => string;
   onDone: () => void;
 }) {
@@ -547,7 +554,13 @@ function CashUpDialog({
         ))}
       </ul>
 
-      <button onClick={onDone} className="mt-6 w-full rounded-2xl bg-brand py-3 font-bold text-white">
+      <Link
+        href={`/${lang}/panel/${slug}/corte`}
+        className="mt-6 block w-full rounded-2xl border-2 border-brand py-3 text-center font-bold text-brand"
+      >
+        📊 {o.studioOpen}
+      </Link>
+      <button onClick={onDone} className="mt-3 w-full rounded-2xl bg-brand py-3 font-bold text-white">
         {o.done}
       </button>
     </Sheet>

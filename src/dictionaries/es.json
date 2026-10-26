@@ -126,6 +126,15 @@
     "newCard": "Crear tarjeta y darle su primer sello",
     "noCustomer": "No encontré a nadie. Escribe su teléfono completo para crear su tarjeta.",
     "noCards": "Todavía no hay tarjetas. Escribe el teléfono de un cliente para darle su primer sello.",
-    "addStamp": "+1 sello"
+    "addStamp": "+1 sello",
+    "studioLink": "📊 Corte en AG Studio",
+    "studioOpen": "Ver el corte completo con gráficas"
+  },
+  "studio": {
+    "title": "Corte de caja",
+    "back": "← Panel",
+    "refresh": "Actualizar",
+    "hint": "Mueve o cambia cualquier gráfica, o pregúntale al asistente de la izquierda.",
+    "noAi": "El asistente de IA no está configurado."
   }
 }

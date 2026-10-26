@@ -1,5 +1,5 @@
 import "server-only";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGoogleGenerativeAI, type GoogleLanguageModelOptions } from "@ai-sdk/google";
 import { generateText, isStepCount, tool } from "ai";
 import { z } from "zod";
 import { menuAvailability } from "./inventory";
@@ -116,6 +116,7 @@ export async function chat(
     },
   });
 
+  const started = Date.now();
   const result = await generateText({
     model: model(),
     instructions: instructions(s, ctx.lang),
@@ -124,7 +125,12 @@ export async function chat(
     stopWhen: isStepCount(3),
     temperature: 0.3,
     maxOutputTokens: 400,
+    // A menu question needs no deep reasoning; thinking was most of the wait.
+    providerOptions: {
+      google: { thinkingConfig: { thinkingLevel: "minimal" } } satisfies GoogleLanguageModelOptions,
+    },
   });
+  console.log(`agent: ${result.steps.length} step(s) in ${Date.now() - started} ms`);
 
   const reply = result.text.trim();
   return { reply: reply || (ctx.lang === "es" ? "¿Me lo repites, por favor?" : "Could you say that again?"), reservation };

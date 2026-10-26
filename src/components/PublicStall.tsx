@@ -152,14 +152,26 @@ export function PublicStall({
       )}
 
       <AgentChat slug={snap.slug} lang={lang} currency={snap.currency} timezone={timezone} isOpen={snap.isOpen} t={t} />
-      {stampCard && <StampCard card={stampCard} t={t} />}
+      {stampCard && <StampCard slug={snap.slug} card={stampCard} t={t} />}
       <p className="text-center text-xs text-muted">{t.madeWith}</p>
     </div>
   );
 }
 
-function StampCard({ card, t }: { card: StampCardInfo; t: Dictionary }) {
+function StampCard({ slug, card, t }: { slug: string; card: StampCardInfo; t: Dictionary }) {
   const p = t.public;
+  const [phone, setPhone] = useState("");
+  const [bad, setBad] = useState(false);
+  async function lookUp(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await fetch(`/api/stalls/${slug}/card`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone }),
+    }).catch(() => null);
+    if (res?.ok) location.reload();
+    else setBad(true);
+  }
   const have = card.have ?? 0;
   const ready = have >= card.perReward;
   const vars = { have, n: card.perReward, reward: card.reward.toLowerCase() };
@@ -185,6 +197,35 @@ function StampCard({ card, t }: { card: StampCardInfo; t: Dictionary }) {
             ? fill(p.stampsHowTo, vars)
             : `${fill(p.stampsCount, vars)} ${fill(p.stampsHowTo, vars)}`}
       </p>
+      {card.have === null && (
+        <form onSubmit={lookUp} className="flex flex-col gap-2">
+          <label className="text-sm font-semibold" htmlFor="stamp-phone">
+            {p.stampsPhone}
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="stamp-phone"
+              value={phone}
+              onChange={(e) => {
+                setPhone(e.target.value.replace(/[^\d +()-]/g, ""));
+                setBad(false);
+              }}
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="55 1234 5678"
+              className="min-w-0 flex-1 rounded-full border border-line bg-background px-4 py-2.5"
+            />
+            <button
+              type="submit"
+              disabled={phone.replace(/\D/g, "").length < 10}
+              className="rounded-full bg-brand px-5 font-semibold text-white active:scale-95 disabled:opacity-50"
+            >
+              {p.stampsPhoneButton}
+            </button>
+          </div>
+          {bad && <p className="text-sm text-bad">{p.stampsBadPhone}</p>}
+        </form>
+      )}
     </section>
   );
 }

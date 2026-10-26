@@ -99,13 +99,28 @@ async function load(b: BusinessRow): Promise<StallState> {
   const reservations = ((check(resRes, "reservations") ?? []) as ReservationRow[]).map(toReservation);
   const payers = [...new Set(reservations.flatMap((r) => (r.payerId ? [r.payerId] : [])))];
   const stamps: Record<string, number> = Object.fromEntries(payers.map((p) => [p, 0]));
-  if (payers.length) {
-    const cards = check(
-      await db().from("stamp_cards").select("payer_id, stamps").eq("business_id", b.id).in("payer_id", payers),
-      "stamp cards",
-    );
-    for (const c of cards ?? []) stamps[c.payer_id] = c.stamps;
+  type CardRow = { payer_id: string; label: string | null; stamps: number; updated_at: string };
+  const [recentRes, payerRes] = await Promise.all([
+    db()
+      .from("stamp_cards")
+      .select("payer_id, label, stamps, updated_at")
+      .eq("business_id", b.id)
+      .order("updated_at", { ascending: false })
+      .limit(50),
+    payers.length
+      ? db().from("stamp_cards").select("payer_id, label, stamps, updated_at").eq("business_id", b.id).in("payer_id", payers)
+      : Promise.resolve({ data: [] as CardRow[], error: null }),
+  ]);
+  const recentCards = (check(recentRes, "stamp cards") ?? []) as CardRow[];
+  for (const c of [...recentCards, ...((check(payerRes, "stamp cards") ?? []) as CardRow[])]) {
+    if (c.payer_id in stamps) stamps[c.payer_id] = c.stamps;
   }
+  const cards = recentCards.map((c) => ({
+    id: c.payer_id,
+    label: c.label,
+    stamps: c.stamps,
+    updatedAt: new Date(c.updated_at).toISOString(),
+  }));
 
   const ingredients: Ingredient[] = (check(ingRes, "ingredients") ?? []).map((i) => ({
     id: i.id,
@@ -159,7 +174,7 @@ async function load(b: BusinessRow): Promise<StallState> {
     sales,
     holdMinutes: b.hold_minutes,
     reservations,
-    loyalty: { stampsPerReward: b.stamps_per_reward, rewardDishId: b.reward_dish_id, stamps },
+    loyalty: { stampsPerReward: b.stamps_per_reward, rewardDishId: b.reward_dish_id, stamps, cards },
   };
 }
 
@@ -206,6 +221,16 @@ export const supabaseStore: StallStore = {
     check(await db().from("dishes").update({ sold_out: soldOut }).eq("id", dishId).eq("business_id", b.id), "sold_out");
     check(await db().from("businesses").update({ updated_at: new Date().toISOString() }).eq("id", b.id), "touch");
     return load(await must(slug));
+  },
+
+  async restock(slug, adds) {
+    const b = await must(slug);
+    const r = await db().rpc("restock", { p_business: b.id, p_adds: adds });
+    if (r.error) {
+      if (r.error.message.includes("closed")) return { ok: false, reason: "closed" };
+      throw new Error(`Supabase restock: ${r.error.message}`);
+    }
+    return { ok: true, state: await load(await must(slug)) };
   },
 
   async reset(slug) {
@@ -311,18 +336,23 @@ export const supabaseStore: StallStore = {
     return Boolean(check(await db().rpc("release_reservation", { p_reservation: id, p_status: status }), "release"));
   },
 
-  async stamps(slug, payerId) {
+  async stamps(slug, cardId) {
     const b = await must(slug);
     const card = check(
-      await db().from("stamp_cards").select("stamps").eq("business_id", b.id).eq("payer_id", payerId).maybeSingle(),
+      await db().from("stamp_cards").select("stamps").eq("business_id", b.id).eq("payer_id", cardId).maybeSingle(),
       "stamp card",
     ) as { stamps: number } | null;
     return card?.stamps ?? 0;
   },
 
-  async redeem(slug, payerId): Promise<RedeemResult> {
+  async addStamp(slug, cardId, label) {
     const b = await must(slug);
-    const r = await db().rpc("redeem_reward", { p_business: b.id, p_payer: payerId });
+    return check(await db().rpc("add_stamp", { p_business: b.id, p_card: cardId, p_label: label ?? "" }), "add_stamp") as number;
+  },
+
+  async redeem(slug, cardId): Promise<RedeemResult> {
+    const b = await must(slug);
+    const r = await db().rpc("redeem_reward", { p_business: b.id, p_payer: cardId });
     if (r.error) {
       if (r.error.message.includes("not_enough_stamps")) return { ok: false, reason: "not_enough" };
       if (r.error.message.includes("no_reward")) return { ok: false, reason: "no_reward" };

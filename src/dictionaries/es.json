@@ -39,10 +39,13 @@
     "notifyIos": "En iPhone: toca Compartir y luego Agregar a inicio. Abre la app desde ahí para activar el aviso.",
     "notifyError": "No se pudo activar el aviso. Intenta otra vez.",
     "stampsTitle": "Tarjeta de sellos",
-    "stampsHowTo": "Cada pedido que apartas y pagas con PayPal suma un sello. Junta {n} y te regalamos una {reward}.",
+    "stampsHowTo": "Cada compra suma un sello: aparta y paga con PayPal, o da tu teléfono al pagar en el puesto. Junta {n} y te regalamos una {reward}.",
     "stampsCount": "Llevas {have} de {n}.",
     "stampsReady": "¡Ya tienes una {reward} gratis! Pídela al recoger.",
-    "stampsNext": "Este apartado te suma un sello cuando lo recojas."
+    "stampsNext": "Este apartado te suma un sello cuando lo recojas.",
+    "stampsPhone": "¿Pagaste en el puesto? Ve tus sellos con tu teléfono",
+    "stampsPhoneButton": "Ver",
+    "stampsBadPhone": "Escribe tu teléfono de 10 dígitos."
   },
   "owner": {
     "title": "Panel",
@@ -94,6 +97,35 @@
     "redeem": "Canjear",
     "redeemed": "Premio canjeado: entrega una {reward}",
     "redeemShort": "No alcanza el inventario para el premio",
-    "redeemNotEnough": "Ya no tiene sellos suficientes"
+    "redeemNotEnough": "Ya no tiene sellos suficientes",
+    "restock": "Surtir",
+    "restockDish": "Surtir ingrediente",
+    "restockTitle": "Surtir inventario",
+    "restockHint": "Escribe cuánto te llegó de cada ingrediente. Se suma a lo que ya tienes y los platillos vuelven a aparecer.",
+    "youHave": "Tienes {n}",
+    "restockConfirm": "Agregar",
+    "restocked": "Inventario actualizado",
+    "guideTitle": "¿Cómo se usa el panel?",
+    "guide": [
+      "Al empezar el día toca Abrir y escribe cuánto tienes de cada ingrediente.",
+      "Para vender, toca los platillos y cobra con Efectivo o Tarjeta. Si escribes el teléfono del cliente, gana un sello.",
+      "Si te llega más mercancía a media jornada, toca Surtir y suma lo que llegó.",
+      "Los apartados del chat aparecen arriba. Cuando el cliente recoja, toca Entregado: se cobra en PayPal y gana su sello.",
+      "En Clientes y sellos puedes buscar a alguien, darle un sello a mano o canjear su premio cuando junte 10.",
+      "Al terminar toca Cerrar para ver tu corte de caja."
+    ],
+    "sell": "Vender",
+    "sellHint": "Toca un platillo para agregarlo a la cuenta y cobra abajo.",
+    "customerPhone": "Teléfono del cliente para su sello (opcional)",
+    "badPhone": "Ese teléfono no tiene 10 dígitos",
+    "stampFull": "🎁 Ya tiene una {reward} gratis",
+    "customers": "Clientes y sellos",
+    "customersHint": "Cada compra con teléfono o pagada con PayPal suma un sello. Con {n} sellos le regalas una {reward}.",
+    "customerSearch": "Busca por teléfono o nombre",
+    "customerName": "Nombre (opcional)",
+    "newCard": "Crear tarjeta y darle su primer sello",
+    "noCustomer": "No encontré a nadie. Escribe su teléfono completo para crear su tarjeta.",
+    "noCards": "Todavía no hay tarjetas. Escribe el teléfono de un cliente para darle su primer sello.",
+    "addStamp": "+1 sello"
   }
 }

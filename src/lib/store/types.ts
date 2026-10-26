@@ -27,6 +27,8 @@ export interface StallStore {
   close(slug: string): Promise<{ state: StallState; cashUp: CashUp }>;
   recordSale(slug: string, lines: OrderLine[], method: PaymentMethod): Promise<SaleResult>;
   setSoldOut(slug: string, dishId: string, soldOut: boolean): Promise<StallState>;
+  /** Adds stock mid-day ({ingredientId: amount}); clears "sold out" on dishes made from it. */
+  restock(slug: string, adds: Record<string, number>): Promise<{ ok: true; state: StallState } | { ok: false; reason: "closed" }>;
   /** Demo only: put the stall back to its seeded state. */
   reset(slug: string): Promise<StallState>;
 
@@ -42,9 +44,11 @@ export interface StallStore {
   release(slug: string, id: string, status: "voided" | "expired"): Promise<boolean>;
 
   // Stamp card. Delivering a reservation with a payer adds the stamp.
-  stamps(slug: string, payerId: string): Promise<number>;
+  stamps(slug: string, cardId: string): Promise<number>;
+  /** One stamp on a card (created if new). Returns the stamps it now has. */
+  addStamp(slug: string, cardId: string, label: string | null): Promise<number>;
   /** Spends a reward's stamps and takes the reward dish out of stock. */
-  redeem(slug: string, payerId: string): Promise<RedeemResult>;
+  redeem(slug: string, cardId: string): Promise<RedeemResult>;
 
   // "Avísame cuando haya".
   addWatch(slug: string, watch: Watch): Promise<void>;

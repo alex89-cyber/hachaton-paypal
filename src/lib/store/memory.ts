@@ -1,6 +1,6 @@
 import { demoDishes, demoIngredients, demoSeedSales } from "../demo-data";
 import { canFulfill, deduct, orderTotalCents, restore } from "../inventory";
-import { cashUp, isActive, type Reservation, type Sale, type StallState } from "../stall";
+import { cashUp, isActive, type Reservation, type Sale, type StallState, type StampCard } from "../stall";
 import type { StallStore, Watch } from "./types";
 
 // In-process store for the demo and for running without Supabase. State lives
@@ -38,26 +38,46 @@ export function seedDemo(now = new Date()): StallState {
     sales,
     holdMinutes: 45,
     reservations: [],
-    loyalty: { stampsPerReward: 10, rewardDishId: "quesabirria", stamps: {} },
+    loyalty: { stampsPerReward: 10, rewardDishId: "quesabirria", stamps: {}, cards: [] },
   };
 }
 
 const g = globalThis as unknown as {
   __stalls?: Map<string, StallState>;
-  __cards?: Map<string, number>;
+  __cards?: Map<string, StampCard & { slug: string }>;
   __watches?: Map<string, Watch[]>;
 };
 const stalls = (g.__stalls ??= new Map([[DEMO_SLUG, seedDemo()]]));
 // Kept apart from the stall so "Reiniciar demo" does not wipe customers' cards.
-const cards = (g.__cards ??= new Map<string, number>());
+const cards = (g.__cards ??= new Map<string, StampCard & { slug: string }>());
 const watches = (g.__watches ??= new Map<string, Watch[]>());
 const cardKey = (slug: string, payerId: string) => `${slug}\u0000${payerId}`;
 
-/** The stall with its payers' current stamps filled in. */
+const stampsOf = (slug: string, id: string) => cards.get(cardKey(slug, id))?.stamps ?? 0;
+
+function stamp(slug: string, id: string, label: string | null, delta: number): number {
+  const cur = cards.get(cardKey(slug, id));
+  const next = {
+    slug,
+    id,
+    label: label || cur?.label || null,
+    stamps: (cur?.stamps ?? 0) + delta,
+    updatedAt: new Date().toISOString(),
+  };
+  cards.set(cardKey(slug, id), next);
+  return next.stamps;
+}
+
+/** The stall with its payers' current stamps and the recent cards filled in. */
 function withStamps(s: StallState): StallState {
   const stamps: Record<string, number> = {};
-  for (const r of s.reservations) if (r.payerId) stamps[r.payerId] = cards.get(cardKey(s.slug, r.payerId)) ?? 0;
-  s.loyalty = { ...s.loyalty, stamps };
+  for (const r of s.reservations) if (r.payerId) stamps[r.payerId] = stampsOf(s.slug, r.payerId);
+  const recent = [...cards.values()]
+    .filter((c) => c.slug === s.slug)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 50)
+    .map(({ id, label, stamps, updatedAt }) => ({ id, label, stamps, updatedAt }));
+  s.loyalty = { ...s.loyalty, stamps, cards: recent };
   return s;
 }
 
@@ -123,6 +143,16 @@ export const memoryStore: StallStore = {
     return save(s);
   },
 
+  async restock(slug, adds) {
+    const s = must(slug);
+    if (!s.isOpen) return { ok: false, reason: "closed" };
+    const added = new Set(Object.entries(adds).filter(([, n]) => n > 0).map(([id]) => id));
+    s.ingredients = s.ingredients.map((i) => (added.has(i.id) ? { ...i, stock: i.stock + adds[i.id] } : i));
+    for (const id of added) s.openingCount[id] = (s.openingCount[id] ?? 0) + adds[id];
+    s.dishes = s.dishes.map((d) => (d.recipe.some((r) => added.has(r.ingredientId)) ? { ...d, soldOut: false } : d));
+    return { ok: true, state: withStamps(save(s)) };
+  },
+
   async reset(slug) {
     if (slug !== DEMO_SLUG) return must(slug);
     return save(seedDemo());
@@ -177,7 +207,7 @@ export const memoryStore: StallStore = {
     if (r?.status !== "authorized") return false;
     r.status = "captured";
     s.sales.push({ id: crypto.randomUUID(), lines: r.lines, method: "paypal", totalCents: r.totalCents, at: new Date().toISOString() });
-    if (r.payerId) cards.set(cardKey(slug, r.payerId), (cards.get(cardKey(slug, r.payerId)) ?? 0) + 1);
+    if (r.payerId) stamp(slug, r.payerId, r.customerName, 1);
     save(s);
     return true;
   },
@@ -192,23 +222,30 @@ export const memoryStore: StallStore = {
     return true;
   },
 
-  async stamps(slug, payerId) {
-    return cards.get(cardKey(slug, payerId)) ?? 0;
+  async stamps(slug, cardId) {
+    return stampsOf(slug, cardId);
   },
 
-  async redeem(slug, payerId) {
+  async addStamp(slug, cardId, label) {
+    must(slug);
+    const n = stamp(slug, cardId, label, 1);
+    save(must(slug));
+    return n;
+  },
+
+  async redeem(slug, cardId) {
     const s = must(slug);
     const { stampsPerReward, rewardDishId } = s.loyalty;
     if (!s.isOpen) return { ok: false, reason: "closed" };
     if (!rewardDishId) return { ok: false, reason: "no_reward" };
-    const have = cards.get(cardKey(slug, payerId)) ?? 0;
+    const have = stampsOf(slug, cardId);
     if (have < stampsPerReward) return { ok: false, reason: "not_enough" };
     const lines = [{ dishId: rewardDishId, qty: 1 }];
     if (s.dishes.find((d) => d.id === rewardDishId)?.soldOut || !canFulfill(lines, s.dishes, s.ingredients).ok) {
       return { ok: false, reason: "short" };
     }
     s.ingredients = deduct(lines, s.dishes, s.ingredients);
-    cards.set(cardKey(slug, payerId), have - stampsPerReward);
+    stamp(slug, cardId, null, -stampsPerReward);
     save(s);
     return { ok: true, stampsLeft: have - stampsPerReward };
   },

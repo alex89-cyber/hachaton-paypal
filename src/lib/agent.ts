@@ -71,7 +71,7 @@ ${stampRule(s)}- If asked about anything unrelated to the stall, steer back to t
 function stampRule(s: StallState) {
   const reward = s.dishes.find((d) => d.id === s.loyalty.rewardDishId);
   if (!reward) return "";
-  return `- Stamp card: every order reserved and paid with PayPal earns a stamp; ${s.loyalty.stampsPerReward} stamps earn a free ${reward.nameEs} / ${reward.nameEn}. Mention it only if they ask about rewards or it fits naturally.\n`;
+  return `- Stamp card: every order reserved and paid with PayPal, or paid at the stall giving a phone number, earns a stamp; ${s.loyalty.stampsPerReward} stamps earn a free ${reward.nameEs} / ${reward.nameEn}. Mention it only if they ask about rewards or it fits naturally.\n`;
 }
 
 export async function chat(

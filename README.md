@@ -33,7 +33,7 @@ npm run dev                  # http://localhost:3000/es (public page + owner pan
 npm test
 ```
 
-Apply the database schema with the Supabase CLI (`supabase db push`) or by pasting `supabase/migrations/0001_init.sql` and then `0002_server_access_and_demo.sql` into the Supabase SQL editor, followed by `0003_reservations.sql` and `0004_stamps_and_alerts.sql`. The second file also creates the demo stall.
+Apply the database schema with the Supabase CLI (`supabase db push`) or by pasting `supabase/migrations/0001_init.sql` and then `0002_server_access_and_demo.sql` into the Supabase SQL editor, followed by `0003_reservations.sql`, `0004_stamps_and_alerts.sql` and `0005_restock_and_counter_stamps.sql`. The second file also creates the demo stall.
 
 Push alerts need a VAPID key pair: run `npx web-push generate-vapid-keys` and set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (optionally `VAPID_SUBJECT`, a `mailto:` or https URL). Without them the alert buttons are hidden.
 

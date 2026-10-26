@@ -40,13 +40,34 @@ export const isActive = (r: Reservation) => r.status === "held" || r.status === 
 /** Remembers the customer's PayPal payer id so the stall page can show their stamp card. */
 export const PAYER_COOKIE = "th_payer";
 
-/** Stamp card: every PayPal order handed over adds a stamp; stampsPerReward of them buy the reward dish. */
+/**
+ * A customer's stamp card at one stall. `id` is their PayPal payer id, or
+ * "tel:<10 digits>" for customers the owner stamps at the counter.
+ */
+export type StampCard = { id: string; label: string | null; stamps: number; updatedAt: string };
+
+/** Stamp card: every PayPal order handed over (or counter sale with a phone) adds a stamp; stampsPerReward of them buy the reward dish. */
 export type Loyalty = {
   stampsPerReward: number;
   rewardDishId: string | null;
-  /** Unspent stamps by PayPal payer id, for the payers in `reservations`. */
+  /** Unspent stamps by card id, for the payers in `reservations`. */
   stamps: Record<string, number>;
+  /** Most recently used cards, newest first. */
+  cards: StampCard[];
 };
+
+/** "55 1234 5678", "+52 55-1234-5678"… → "tel:5512345678". Null if it is not a 10-digit phone. */
+export function phoneCardId(phone: string): string | null {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 10 ? `tel:${digits.slice(-10)}` : null;
+}
+
+/** What the owner sees for a card: its label, or the phone formatted. */
+export function cardLabel(c: { id: string; label: string | null }): string {
+  if (c.label) return c.label;
+  const d = c.id.startsWith("tel:") ? c.id.slice(4) : "";
+  return d ? `${d.slice(0, 2)} ${d.slice(2, 6)} ${d.slice(6)}` : "PayPal";
+}
 
 export type StallState = {
   slug: string;

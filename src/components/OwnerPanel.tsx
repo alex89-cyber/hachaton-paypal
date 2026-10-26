@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Dictionary } from "@/dictionaries";
 import { clock, fill, money, qty } from "@/lib/format";
-import type { CashUp, OwnerView, Reservation } from "@/lib/stall";
+import { type CashUp, cardLabel, type OwnerView, phoneCardId, type Reservation } from "@/lib/stall";
 
 type Ticket = Record<string, number>;
 type Toast = { kind: "ok" | "bad"; text: string } | null;
@@ -29,6 +29,8 @@ export function OwnerPanel({
   const [toast, setToast] = useState<Toast>(null);
   const [opening, setOpening] = useState(false);
   const [cashUp, setCashUp] = useState<CashUp | null>(null);
+  const [restocking, setRestocking] = useState(false);
+  const [phone, setPhone] = useState("");
 
   const name = useCallback((d: { nameEs: string; nameEn: string }) => (lang === "es" ? d.nameEs : d.nameEn), [lang]);
   const fmt = useCallback((c: number) => money(c, view.currency, lang), [view.currency, lang]);
@@ -49,7 +51,13 @@ export function OwnerPanel({
     return () => clearTimeout(id);
   }, [toast]);
 
-  async function act(body: object): Promise<(OwnerView & { closedCashUp?: CashUp; error?: string; short?: string[] }) | null> {
+  type ActResult = OwnerView & {
+    closedCashUp?: CashUp;
+    error?: string;
+    short?: string[];
+    stamped?: { cardId: string; stamps: number };
+  };
+  async function act(body: object): Promise<ActResult | null> {
     setBusy(true);
     try {
       const res = await fetch(`/api/stalls/${view.slug}`, {
@@ -78,9 +86,21 @@ export function OwnerPanel({
     setTicket((cur) => ({ ...cur, [dishId]: Math.max(0, (cur[dishId] ?? 0) + delta) }));
   }
 
+  const rewardName = useMemo(() => {
+    const d = view.dishes.find((x) => x.id === view.loyalty.rewardDishId);
+    return d ? name(d).toLowerCase() : "";
+  }, [view.dishes, view.loyalty.rewardDishId, name]);
+
+  /** "⭐ 4 de 10 sellos", or the reward note when the card is full. */
+  const stampNote = (stamps: number) =>
+    stamps >= view.loyalty.stampsPerReward
+      ? fill(o.stampFull, { reward: rewardName })
+      : fill(o.stampsLine, { have: stamps, n: view.loyalty.stampsPerReward });
+
   async function charge(method: "cash" | "card") {
     if (!lines.length || busy) return;
-    const r = await act({ action: "sale", lines, method });
+    if (phone.trim() && !phoneCardId(phone)) return setToast({ kind: "bad", text: o.badPhone });
+    const r = await act({ action: "sale", lines, method, customerPhone: phone.trim() || undefined });
     if (!r) return;
     if (r.error === "short") {
       const names = (r.short ?? []).map((id) => view.ingredients.find((i) => i.id === id)?.name ?? id).join(", ");
@@ -88,8 +108,10 @@ export function OwnerPanel({
     } else if (r.error === "closed") {
       setToast({ kind: "bad", text: o.closedError });
     } else {
-      setToast({ kind: "ok", text: fill(o.sold, { total: fmt(ticketTotal) }) });
+      const sold = fill(o.sold, { total: fmt(ticketTotal) });
+      setToast({ kind: "ok", text: r.stamped ? `${sold} · ${stampNote(r.stamped.stamps)}` : sold });
       setTicket({});
+      setPhone("");
     }
   }
 
@@ -126,6 +148,15 @@ export function OwnerPanel({
             {o.publicPage}
           </Link>
           <span className="flex-1" />
+          {view.isOpen && (
+            <button
+              onClick={() => setRestocking(true)}
+              disabled={busy}
+              className="rounded-full bg-brand px-3 py-1.5 text-sm font-semibold text-white active:scale-95"
+            >
+              {o.restock}
+            </button>
+          )}
           {view.isOpen ? (
             <button
               onClick={close}
@@ -144,6 +175,15 @@ export function OwnerPanel({
           )}
         </div>
       </header>
+
+      <details className="mx-4 mt-4 rounded-2xl bg-brand-soft px-4 py-3 text-sm">
+        <summary className="cursor-pointer font-semibold text-brand">{o.guideTitle}</summary>
+        <ol className="mt-2 flex list-decimal flex-col gap-1.5 pl-5">
+          {o.guide.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+      </details>
 
       <Reservations
         view={view}
@@ -174,6 +214,8 @@ export function OwnerPanel({
         }}
       />
 
+      <h2 className="px-4 pt-5 text-sm font-semibold uppercase tracking-wide text-muted">{o.sell}</h2>
+      <p className="px-4 text-sm text-muted">{o.sellHint}</p>
       <section className="grid grid-cols-2 gap-3 p-4">
         {view.dishes.map((d) => {
           const out = d.portions === 0;
@@ -208,21 +250,55 @@ export function OwnerPanel({
                   {inTicket}
                 </span>
               )}
-              {view.isOpen && (
-                <button
-                  onClick={() => act({ action: "soldOut", dishId: d.id, soldOut: !d.soldOut })}
-                  disabled={busy}
-                  className="border-t border-line px-3 py-2 text-xs font-semibold text-muted active:bg-brand-soft"
-                >
-                  {d.soldOut ? o.unmarkSoldOut : o.markSoldOut}
-                </button>
-              )}
+              {view.isOpen &&
+                (out && !d.soldOut ? (
+                  // Out because an ingredient ran out: the fix is adding stock.
+                  <button
+                    onClick={() => setRestocking(true)}
+                    disabled={busy}
+                    className="border-t border-line px-3 py-2 text-xs font-semibold text-brand active:bg-brand-soft"
+                  >
+                    {o.restockDish}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => act({ action: "soldOut", dishId: d.id, soldOut: !d.soldOut })}
+                    disabled={busy}
+                    className="border-t border-line px-3 py-2 text-xs font-semibold text-muted active:bg-brand-soft"
+                  >
+                    {d.soldOut ? o.unmarkSoldOut : o.markSoldOut}
+                  </button>
+                ))}
             </div>
           );
         })}
       </section>
 
-      <footer className="px-4 text-center text-xs text-muted">
+      {view.loyalty.rewardDishId && (
+        <Customers
+          view={view}
+          t={t}
+          busy={busy}
+          reward={rewardName}
+          onStamp={async (body) => {
+            const r = await act({ action: "stamp", ...body });
+            if (r?.stamped) setToast({ kind: "ok", text: stampNote(r.stamped.stamps) });
+            else if (r?.error) setToast({ kind: "bad", text: o.badPhone });
+          }}
+          onRedeem={async (cardId) => {
+            const r = await act({ action: "redeem", cardId });
+            if (!r) return;
+            if (!r.error) setToast({ kind: "ok", text: fill(o.redeemed, { reward: rewardName }) });
+            else
+              setToast({
+                kind: "bad",
+                text: r.error === "closed" ? o.closedError : r.error === "short" ? o.redeemShort : o.redeemNotEnough,
+              });
+          }}
+        />
+      )}
+
+      <footer className="mt-6 px-4 text-center text-xs text-muted">
         <p>{o.demoNote}</p>
         <button onClick={() => act({ action: "reset" })} className="mt-2 underline">
           {o.reset}
@@ -255,8 +331,28 @@ export function OwnerPanel({
                     );
                   })}
                 </ul>
+                {view.loyalty.rewardDishId && (
+                  <label className="mb-3 flex items-center gap-2 rounded-xl border border-line bg-background px-3 py-2">
+                    <span aria-hidden>⭐</span>
+                    <input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value.replace(/[^\d +()-]/g, ""))}
+                      inputMode="tel"
+                      autoComplete="off"
+                      placeholder={o.customerPhone}
+                      aria-label={o.customerPhone}
+                      className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                    />
+                  </label>
+                )}
                 <div className="mb-3 flex items-baseline justify-between">
-                  <button onClick={() => setTicket({})} className="text-sm text-muted underline">
+                  <button
+                    onClick={() => {
+                      setTicket({});
+                      setPhone("");
+                    }}
+                    className="text-sm text-muted underline"
+                  >
                     {o.clear}
                   </button>
                   <span className="text-2xl font-bold tabular-nums">{fmt(ticketTotal)}</span>
@@ -303,6 +399,22 @@ export function OwnerPanel({
           onOpen={async (counts) => {
             await act({ action: "open", counts });
             setOpening(false);
+          }}
+        />
+      )}
+
+      {restocking && (
+        <RestockDialog
+          view={view}
+          t={t}
+          lang={lang}
+          busy={busy}
+          onCancel={() => setRestocking(false)}
+          onRestock={async (adds) => {
+            const r = await act({ action: "restock", adds });
+            setRestocking(false);
+            if (r?.error === "closed") setToast({ kind: "bad", text: o.closedError });
+            else if (r) setToast({ kind: "ok", text: o.restocked });
           }}
         />
       )}
@@ -542,6 +654,175 @@ function Reservations({
           {r.status === "captured" && stamps(r, true)}
         </div>
       ))}
+    </section>
+  );
+}
+
+function RestockDialog({
+  view,
+  t,
+  lang,
+  busy,
+  onCancel,
+  onRestock,
+}: {
+  view: OwnerView;
+  t: Dictionary;
+  lang: string;
+  busy: boolean;
+  onCancel: () => void;
+  onRestock: (adds: Record<string, number>) => void;
+}) {
+  const o = t.owner;
+  const [adds, setAdds] = useState<Record<string, string>>({});
+  const parsed = Object.fromEntries(
+    Object.entries(adds)
+      .map(([k, v]) => [k, Number(v) || 0] as const)
+      .filter(([, n]) => n > 0),
+  );
+  return (
+    <Sheet>
+      <h2 className="text-xl font-bold">{o.restockTitle}</h2>
+      <p className="mt-1 text-sm text-muted">{o.restockHint}</p>
+      <form
+        className="mt-4 flex flex-col gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (Object.keys(parsed).length) onRestock(parsed);
+        }}
+      >
+        {view.ingredients.map((i) => (
+          <label key={i.id} className="flex items-center gap-3">
+            <span className="min-w-0 flex-1">
+              <span className="block">{i.name}</span>
+              <span className={`block text-xs ${i.stock <= 0 ? "font-semibold text-bad" : "text-muted"}`}>
+                {fill(o.youHave, { n: qty(i.stock, i.unit, lang) })}
+              </span>
+            </span>
+            <span className="text-lg text-muted">+</span>
+            <input
+              inputMode="decimal"
+              placeholder="0"
+              className="w-24 rounded-xl border border-line bg-background px-3 py-2 text-right text-lg tabular-nums"
+              value={adds[i.id] ?? ""}
+              onChange={(e) => setAdds((c) => ({ ...c, [i.id]: e.target.value.replace(/[^\d.]/g, "") }))}
+              aria-label={`${o.restock} ${i.name} (${i.unit})`}
+            />
+            <span className="w-8 text-sm text-muted">{i.unit}</span>
+          </label>
+        ))}
+        <div className="mt-2 grid grid-cols-2 gap-3">
+          <button type="button" onClick={onCancel} className="rounded-2xl border border-line py-3 font-semibold">
+            {o.cancel}
+          </button>
+          <button
+            type="submit"
+            disabled={busy || !Object.keys(parsed).length}
+            className="rounded-2xl bg-brand py-3 font-bold text-white disabled:opacity-50"
+          >
+            {o.restockConfirm}
+          </button>
+        </div>
+      </form>
+    </Sheet>
+  );
+}
+
+/** Stamp cards: find a customer, add a stamp by hand, hand over the reward. */
+function Customers({
+  view,
+  t,
+  busy,
+  reward,
+  onStamp,
+  onRedeem,
+}: {
+  view: OwnerView;
+  t: Dictionary;
+  busy: boolean;
+  reward: string;
+  onStamp: (body: { cardId?: string; phone?: string; name?: string }) => void;
+  onRedeem: (cardId: string) => void;
+}) {
+  const o = t.owner;
+  const per = view.loyalty.stampsPerReward;
+  const [query, setQuery] = useState("");
+  const [name, setName] = useState("");
+  const q = query.trim().toLowerCase();
+  const asPhone = phoneCardId(query);
+  const cards = view.loyalty.cards.filter(
+    (c) => !q || c.id === asPhone || cardLabel(c).toLowerCase().includes(q) || c.id.includes(q.replace(/\D/g, "") || "~"),
+  );
+  const isNew = asPhone !== null && !view.loyalty.cards.some((c) => c.id === asPhone);
+
+  return (
+    <section className="flex flex-col gap-2 px-4 pt-2">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{o.customers}</h2>
+      <p className="text-sm text-muted">{fill(o.customersHint, { n: per, reward })}</p>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={o.customerSearch}
+        className="rounded-xl border border-line bg-surface px-3 py-2"
+        aria-label={o.customerSearch}
+      />
+      {isNew && (
+        <div className="flex flex-col gap-2 rounded-2xl border-2 border-dashed border-line p-3">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={o.customerName}
+            className="rounded-xl border border-line bg-background px-3 py-2"
+            aria-label={o.customerName}
+          />
+          <button
+            onClick={() => {
+              onStamp({ phone: query, name });
+              setName("");
+            }}
+            disabled={busy}
+            className="rounded-xl bg-brand py-2.5 font-bold text-white active:scale-[0.98] disabled:opacity-40"
+          >
+            {o.newCard}
+          </button>
+        </div>
+      )}
+      {cards.length === 0 && !isNew && <p className="py-2 text-sm text-muted">{q ? o.noCustomer : o.noCards}</p>}
+      <ul className="flex flex-col gap-2">
+        {cards.slice(0, 8).map((c) => {
+          const ready = c.stamps >= per;
+          return (
+            <li
+              key={c.id}
+              className={`flex items-center gap-3 rounded-2xl p-3 shadow-sm ${ready ? "bg-warn-soft" : "bg-surface"}`}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">{cardLabel(c)}</p>
+                <p className={`text-sm ${ready ? "font-semibold text-warn" : "text-muted"}`}>
+                  {ready ? fill(o.stampFull, { reward }) : fill(o.stampsLine, { have: c.stamps, n: per })}
+                </p>
+              </div>
+              {ready && (
+                <button
+                  onClick={() => onRedeem(c.id)}
+                  disabled={busy}
+                  className="rounded-full bg-warn px-3 py-1.5 text-sm font-bold text-white active:scale-95 disabled:opacity-40"
+                >
+                  {o.redeem}
+                </button>
+              )}
+              <button
+                onClick={() => onStamp({ cardId: c.id })}
+                disabled={busy}
+                className="rounded-full border border-line px-3 py-1.5 text-sm font-semibold active:scale-95 disabled:opacity-40"
+                aria-label={`${o.addStamp} ${cardLabel(c)}`}
+              >
+                {o.addStamp}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

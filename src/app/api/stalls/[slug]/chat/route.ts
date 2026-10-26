@@ -30,7 +30,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/stalls/[slu
     const out = await chat(s, messages, { lang: parsed.data.lang, origin: origin(request) });
     return Response.json(out, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
-    console.error("agent failed", e);
+    console.error("agent failed", e instanceof Error ? e.message : e, (e as { responseBody?: string })?.responseBody?.slice(0, 500) ?? "");
     return Response.json({ error: "agent_failed" }, { status: 502 });
   }
 }

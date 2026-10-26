@@ -117,21 +117,39 @@ export async function chat(
   });
 
   const started = Date.now();
-  const result = await generateText({
-    model: model(),
-    instructions: instructions(s, ctx.lang),
-    messages,
-    tools: s.isOpen ? { reserve_order: reserveOrder } : {},
-    stopWhen: isStepCount(3),
-    temperature: 0.3,
-    maxOutputTokens: 400,
-    // A menu question needs no deep reasoning; thinking was most of the wait.
-    providerOptions: {
-      google: { thinkingConfig: { thinkingLevel: "minimal" } } satisfies GoogleLanguageModelOptions,
-    },
-  });
+  const run = (thinking: boolean) =>
+    generateText({
+      model: model(),
+      instructions: instructions(s, ctx.lang),
+      messages,
+      tools: s.isOpen ? { reserve_order: reserveOrder } : {},
+      stopWhen: isStepCount(3),
+      temperature: 0.3,
+      maxOutputTokens: 400,
+      // A menu question needs no deep reasoning; thinking was most of the wait.
+      // Not every Gemini model accepts this, so a failure retries without it.
+      providerOptions: thinking
+        ? { google: { thinkingConfig: { thinkingLevel: "minimal" } } satisfies GoogleLanguageModelOptions }
+        : undefined,
+    });
+
+  let result;
+  try {
+    result = await run(true);
+  } catch (e) {
+    console.error(`agent: failed with minimal thinking, retrying without it: ${describe(e)}`);
+    result = await run(false);
+  }
   console.log(`agent: ${result.steps.length} step(s) in ${Date.now() - started} ms`);
 
   const reply = result.text.trim();
   return { reply: reply || (ctx.lang === "es" ? "¿Me lo repites, por favor?" : "Could you say that again?"), reservation };
+}
+
+function describe(e: unknown): string {
+  if (e && typeof e === "object") {
+    const o = e as { statusCode?: number; responseBody?: string; message?: string };
+    return `${o.statusCode ?? ""} ${o.message ?? ""} ${o.responseBody?.slice(0, 300) ?? ""}`.trim();
+  }
+  return String(e);
 }

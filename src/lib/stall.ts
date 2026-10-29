@@ -127,6 +127,8 @@ export function publicSnapshot(s: StallState): PublicSnapshot {
 }
 
 export type OwnerDish = PublicDish & {
+  /** What one portion uses, so the panel can show how many dishes a count makes. */
+  recipe: Dish["recipe"];
   soldOut: boolean;
   soldOutAt: string | null;
   limitingIngredient: string | null;
@@ -177,6 +179,7 @@ export function ownerView(s: StallState, now = new Date()): OwnerView {
         nameEn: d.nameEn,
         priceCents: d.priceCents,
         portions,
+        recipe: d.recipe,
         soldOut: d.soldOut,
         soldOutAt: portions > 0 && f?.soldOutAt ? f.soldOutAt.toISOString() : null,
         limitingIngredient: a?.limitingIngredientId ? (ingName.get(a.limitingIngredientId) ?? null) : null,

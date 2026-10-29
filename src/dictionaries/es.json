@@ -53,7 +53,7 @@
     "openDay": "Abrir",
     "closeDay": "Cerrar",
     "openTitle": "Conteo al abrir",
-    "openHint": "Escribe lo que tienes de cada ingrediente. Solo una vez al día.",
+    "openHint": "Escribe cuánto tienes de cada INGREDIENTE (no de platillos). Abajo ves cuántos platillos te salen con eso.",
     "openConfirm": "Abrir el puesto",
     "cancel": "Cancelar",
     "ticket": "Cuenta",
@@ -64,7 +64,7 @@
     "sold": "Venta registrada: {total}",
     "short": "No alcanza: falta {items}",
     "closedError": "El puesto está cerrado. Ábrelo para vender.",
-    "markSoldOut": "Se acabó",
+    "markSoldOut": "Marcar agotado",
     "unmarkSoldOut": "Todavía hay",
     "runsOutAt": "se acaba ~{time}",
     "limitedBy": "por {ingredient}",
@@ -135,7 +135,10 @@
     "pinWrong": "PIN incorrecto",
     "pinTooMany": "Demasiados intentos. Espera un minuto.",
     "pinError": "No se pudo entrar. Intenta otra vez.",
-    "signOut": "Salir del panel en este dispositivo"
+    "signOut": "Salir del panel en este dispositivo",
+    "shortSoldOut": "Un platillo de la cuenta está marcado como agotado. Quítalo o toca \"Todavía hay\".",
+    "openYields": "Con esto te alcanza para",
+    "openRecipe": "cada uno lleva"
   },
   "studio": {
     "title": "Corte de caja",

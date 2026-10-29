@@ -53,7 +53,7 @@
     "openDay": "Open",
     "closeDay": "Close",
     "openTitle": "Opening count",
-    "openHint": "Enter how much you have of each ingredient. Once a day.",
+    "openHint": "Enter how much of each INGREDIENT you have (not dishes). Below you see how many dishes that makes.",
     "openConfirm": "Open the stall",
     "cancel": "Cancel",
     "ticket": "Ticket",
@@ -64,7 +64,7 @@
     "sold": "Sale recorded: {total}",
     "short": "Not enough: short on {items}",
     "closedError": "The stall is closed. Open it to sell.",
-    "markSoldOut": "Sold out",
+    "markSoldOut": "Mark sold out",
     "unmarkSoldOut": "Back in stock",
     "runsOutAt": "runs out ~{time}",
     "limitedBy": "by {ingredient}",
@@ -135,7 +135,10 @@
     "pinWrong": "Wrong PIN",
     "pinTooMany": "Too many tries. Wait a minute.",
     "pinError": "Couldn't sign in. Try again.",
-    "signOut": "Sign out of the panel on this device"
+    "signOut": "Sign out of the panel on this device",
+    "shortSoldOut": "A dish in the ticket is marked sold out. Remove it or tap \"Back in stock\".",
+    "openYields": "That's enough for",
+    "openRecipe": "each takes"
   },
   "studio": {
     "title": "Cash-up",

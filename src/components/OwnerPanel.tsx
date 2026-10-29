@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Dictionary } from "@/dictionaries";
 import { clock, fill, money, qty } from "@/lib/format";
+import { menuAvailability } from "@/lib/inventory";
 import { type CashUp, cardLabel, type OwnerView, phoneCardId, type Reservation } from "@/lib/stall";
 
 type Ticket = Record<string, number>;
@@ -87,14 +88,19 @@ export function OwnerPanel({
     }
   }
 
-  const lines = useMemo(
-    () => Object.entries(ticket).filter(([, n]) => n > 0).map(([dishId, n]) => ({ dishId, qty: n })),
-    [ticket],
-  );
+  // Capped by what is left now: a dish marked sold out or used up (here or on
+  // another device) after it went into the ticket drops out instead of failing the sale.
+  const lines = useMemo(() => {
+    const left = new Map(view.dishes.map((d) => [d.id, d.portions]));
+    return Object.entries(ticket)
+      .map(([dishId, n]) => ({ dishId, qty: Math.min(n, left.get(dishId) ?? 0) }))
+      .filter((l) => l.qty > 0);
+  }, [ticket, view.dishes]);
   const ticketTotal = lines.reduce((s, l) => s + (view.dishes.find((d) => d.id === l.dishId)?.priceCents ?? 0) * l.qty, 0);
 
   function add(dishId: string, delta: number) {
-    setTicket((cur) => ({ ...cur, [dishId]: Math.max(0, (cur[dishId] ?? 0) + delta) }));
+    const left = view.dishes.find((d) => d.id === dishId)?.portions ?? 0;
+    setTicket((cur) => ({ ...cur, [dishId]: Math.max(0, Math.min(cur[dishId] ?? 0, left) + delta) }));
   }
 
   const rewardName = useMemo(() => {
@@ -115,7 +121,8 @@ export function OwnerPanel({
     if (!r) return;
     if (r.error === "short") {
       const names = (r.short ?? []).map((id) => view.ingredients.find((i) => i.id === id)?.name ?? id).join(", ");
-      setToast({ kind: "bad", text: fill(o.short, { items: names }) });
+      // No ingredient named: a dish in the ticket was just marked sold out.
+      setToast({ kind: "bad", text: names ? fill(o.short, { items: names }) : o.shortSoldOut });
     } else if (r.error === "closed") {
       setToast({ kind: "bad", text: o.closedError });
     } else {
@@ -235,7 +242,7 @@ export function OwnerPanel({
       <section className="grid grid-cols-2 gap-3 p-4">
         {view.dishes.map((d) => {
           const out = d.portions === 0;
-          const inTicket = ticket[d.id] ?? 0;
+          const inTicket = lines.find((l) => l.dishId === d.id)?.qty ?? 0;
           return (
             <div
               key={d.id}
@@ -427,6 +434,7 @@ export function OwnerPanel({
         <OpenDialog
           view={view}
           t={t}
+          lang={lang}
           busy={busy}
           onCancel={() => setOpening(false)}
           onOpen={async (counts) => {
@@ -470,18 +478,27 @@ function Sheet({ children }: { children: React.ReactNode }) {
 function OpenDialog({
   view,
   t,
+  lang,
   busy,
   onCancel,
   onOpen,
 }: {
   view: OwnerView;
   t: Dictionary;
+  lang: string;
   busy: boolean;
   onCancel: () => void;
   onOpen: (counts: Record<string, number>) => void;
 }) {
   const [counts, setCounts] = useState<Record<string, string>>(() =>
     Object.fromEntries(view.ingredients.map((i) => [i.id, String(Math.round(i.stock))])),
+  );
+  const parse = (v: string | undefined) => Math.max(0, Number(v) || 0);
+  // Live preview: how many of each dish the typed counts make, and what one takes.
+  const ing = new Map(view.ingredients.map((i) => [i.id, i]));
+  const yields = menuAvailability(
+    view.dishes.map((d) => ({ ...d, soldOut: false })),
+    view.ingredients.map((i) => ({ ...i, stock: parse(counts[i.id]) })),
   );
   return (
     <Sheet>
@@ -491,7 +508,7 @@ function OpenDialog({
         className="mt-4 flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          onOpen(Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, Math.max(0, Number(v) || 0)])));
+          onOpen(Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, parse(v)])));
         }}
       >
         {view.ingredients.map((i) => (
@@ -507,6 +524,34 @@ function OpenDialog({
             <span className="w-8 text-sm text-muted">{i.unit}</span>
           </label>
         ))}
+        <div className="mt-2 rounded-2xl bg-brand-soft p-3 text-sm">
+          <p className="font-semibold">{t.owner.openYields}:</p>
+          <ul className="mt-1 flex flex-col gap-1.5">
+            {view.dishes.map((d) => {
+              const n = yields.find((y) => y.dishId === d.id)?.portions ?? 0;
+              const recipe = d.recipe
+                .map((r) => {
+                  const i = ing.get(r.ingredientId);
+                  return i ? `${qty(r.qty, i.unit, lang)} ${i.name}` : null;
+                })
+                .filter(Boolean)
+                .join(", ");
+              return (
+                <li key={d.id}>
+                  <span className="flex justify-between gap-2">
+                    <span className="font-medium">{lang === "es" ? d.nameEs : d.nameEn}</span>
+                    <b className={`tabular-nums ${n === 0 ? "text-bad" : ""}`}>~{n}</b>
+                  </span>
+                  {recipe && (
+                    <span className="block text-xs text-muted">
+                      {t.owner.openRecipe}: {recipe}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
         <div className="mt-2 grid grid-cols-2 gap-3">
           <button type="button" onClick={onCancel} className="rounded-2xl border border-line py-3 font-semibold">
             {t.owner.cancel}

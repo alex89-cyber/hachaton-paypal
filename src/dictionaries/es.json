@@ -8,7 +8,7 @@
   "updated": "Actualizado hace {n} min",
   "updatedNow": "Actualizado ahora",
   "demoLink": "Ver la página de Birria Doña Lupe",
-  "ownerLink": "Entrar al panel del dueño (demo)",
+  "ownerLink": "Entrar al panel del dueño",
   "switchLang": "English",
   "closedNote": "Ahorita está cerrado. Vuelve a revisar más tarde.",
   "madeWith": "Hecho con ¿Todavía hay?",
@@ -128,7 +128,14 @@
     "noCards": "Todavía no hay tarjetas. Escribe el teléfono de un cliente para darle su primer sello.",
     "addStamp": "+1 sello",
     "studioLink": "📊 Corte en AG Studio",
-    "studioOpen": "Ver el corte completo con gráficas"
+    "studioOpen": "Ver el corte completo con gráficas",
+    "pinLabel": "PIN del dueño",
+    "pinHint": "Escribe tu PIN para entrar al panel.",
+    "pinEnter": "Entrar",
+    "pinWrong": "PIN incorrecto",
+    "pinTooMany": "Demasiados intentos. Espera un minuto.",
+    "pinError": "No se pudo entrar. Intenta otra vez.",
+    "signOut": "Salir del panel en este dispositivo"
   },
   "studio": {
     "title": "Corte de caja",

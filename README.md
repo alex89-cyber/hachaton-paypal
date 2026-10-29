@@ -4,7 +4,7 @@ A point of sale and live menu for street food stalls that cook a batch in the mo
 
 Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/).
 
-**Live demo:** [public page](https://hachaton-paypal.onrender.com/en/birria-dona-lupe) · [owner panel](https://hachaton-paypal.onrender.com/en/panel/birria-dona-lupe) · [cash-up in AG Studio](https://hachaton-paypal.onrender.com/en/panel/birria-dona-lupe/corte). The demo stall is "Birria Doña Lupe"; switch between English and Spanish at the top of the public page. It runs on a free plan, so the first visit can take up to a minute to wake up. PayPal runs in sandbox mode.
+**Live demo:** [public page](https://hachaton-paypal.onrender.com/en/birria-dona-lupe) · [owner panel](https://hachaton-paypal.onrender.com/en/panel/birria-dona-lupe) · [cash-up in AG Studio](https://hachaton-paypal.onrender.com/en/panel/birria-dona-lupe/corte). The demo stall is "Birria Doña Lupe"; switch between English and Spanish at the top of the public page. The owner panel and cash-up ask for the owner PIN, which is given in the Devpost submission. It runs on a free plan, so the first visit can take up to a minute to wake up. PayPal runs in sandbox mode.
 
 | Public page | Owner panel | Cash-up in AG Studio |
 | --- | --- | --- |
@@ -76,9 +76,11 @@ Without any keys the app runs on an in-memory store with a seeded demo day. The 
 | `GEMINI_MODEL`, `STUDIO_GEMINI_MODEL` | Optional model overrides (both default to `gemini-flash-lite-latest`) |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Push alerts; generate a pair with `npx web-push generate-vapid-keys` |
 | `NEXT_PUBLIC_APP_URL` | Optional public URL for PayPal return links (otherwise taken from the request) |
+| `OWNER_PIN` | PIN for the owner panel, the cash-up and every owner action; without it they are open |
+| `DEMO_MODE` | `1` shows **Reset demo** in the owner panel, which brings the demo stall back to a seeded day of sales |
 | `NEXT_PUBLIC_AG_STUDIO_LICENSE` | AG Studio license key, read at build time; without it Studio shows a trial watermark |
 
-To use Supabase, run the migrations in `supabase/migrations` in order (`0001` to `0005`) with `supabase db push` or the SQL editor. `0002` also creates the demo stall. **Reset demo** in the owner panel brings the stall back to a seeded day of sales.
+To use Supabase, run the migrations in `supabase/migrations` in order (`0001` to `0005`) with `supabase db push` or the SQL editor. `0002` also creates the demo stall.
 
 ## Roadmap
 

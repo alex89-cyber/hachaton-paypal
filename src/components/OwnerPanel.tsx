@@ -16,11 +16,17 @@ export function OwnerPanel({
   lang,
   timezone,
   t,
+  demo,
+  canSignOut,
 }: {
   initial: OwnerView;
   lang: string;
   timezone: string;
   t: Dictionary;
+  /** DEMO_MODE: show "Reiniciar demo". */
+  demo: boolean;
+  /** An owner PIN is set, so there is a session to end. */
+  canSignOut: boolean;
 }) {
   const o = t.owner;
   const [view, setView] = useState(initial);
@@ -65,6 +71,11 @@ export function OwnerPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      // Signed out elsewhere, or the PIN changed: back to the PIN screen.
+      if (res.status === 401) {
+        window.location.reload();
+        return null;
+      }
       const json = await res.json();
       if (res.ok) setView(json);
       return json;
@@ -303,12 +314,29 @@ export function OwnerPanel({
         />
       )}
 
-      <footer className="mt-6 px-4 text-center text-xs text-muted">
-        <p>{o.demoNote}</p>
-        <button onClick={() => act({ action: "reset" })} className="mt-2 underline">
-          {o.reset}
-        </button>
-      </footer>
+      {(demo || canSignOut) && (
+        <footer className="mt-6 flex flex-col items-center gap-2 px-4 text-center text-xs text-muted">
+          {demo && (
+            <>
+              <p>{o.demoNote}</p>
+              <button onClick={() => act({ action: "reset" })} className="underline">
+                {o.reset}
+              </button>
+            </>
+          )}
+          {canSignOut && (
+            <button
+              onClick={async () => {
+                await fetch("/api/owner/login", { method: "DELETE" }).catch(() => null);
+                window.location.reload();
+              }}
+              className="underline"
+            >
+              {o.signOut}
+            </button>
+          )}
+        </footer>
+      )}
 
       {view.isOpen && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">

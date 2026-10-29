@@ -5,12 +5,12 @@ import { PayPalError } from "@/lib/paypal";
 import { notifyWaiting } from "@/lib/push";
 import { cancel, deliver, loadStall } from "@/lib/reservations";
 import { store } from "@/lib/store";
+import { demoMode, isOwner, unauthorized } from "@/lib/owner-auth";
 
 // GET  /api/stalls/:slug             public snapshot (RN-07)
 // GET  /api/stalls/:slug?view=owner  owner panel data
 // POST /api/stalls/:slug             owner actions, see `Action`
-// Owner routes are open while the demo runs on the memory store; they move
-// behind Supabase auth with the Supabase store.
+// The owner view and every POST need the owner PIN (see owner-auth.ts).
 
 export async function GET(request: Request, ctx: RouteContext<"/api/stalls/[slug]">) {
   await connection();
@@ -18,6 +18,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/stalls/[slug
   const s = await loadStall(slug);
   if (!s) return Response.json({ error: "not_found" }, { status: 404 });
   const view = new URL(request.url).searchParams.get("view");
+  if (view === "owner" && !(await isOwner())) return unauthorized();
   return Response.json(view === "owner" ? ownerView(s) : publicSnapshot(s), {
     headers: { "Cache-Control": "no-store" },
   });
@@ -60,6 +61,7 @@ async function stamped(slug: string, cardId: string, stamps: number) {
 
 export async function POST(request: Request, ctx: RouteContext<"/api/stalls/[slug]">) {
   const { slug } = await ctx.params;
+  if (!(await isOwner())) return unauthorized();
   if (!(await store.get(slug))) return Response.json({ error: "not_found" }, { status: 404 });
 
   const parsed = Action.safeParse(await request.json().catch(() => null));
@@ -101,6 +103,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/stalls/[slu
       return Response.json({ ...ownerView(state), closedCashUp: cashUp });
     }
     case "reset":
+      if (!demoMode()) return Response.json({ error: "demo_off" }, { status: 403 });
       return Response.json(ownerView(await store.reset(slug)));
     case "deliver":
     case "cancelReservation": {

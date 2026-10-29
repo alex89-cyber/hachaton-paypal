@@ -8,7 +8,7 @@
   "updated": "Updated {n} min ago",
   "updatedNow": "Updated just now",
   "demoLink": "See Birria Doña Lupe's page",
-  "ownerLink": "Open the owner panel (demo)",
+  "ownerLink": "Owner panel",
   "switchLang": "Español",
   "closedNote": "Closed right now. Check back later.",
   "madeWith": "Made with ¿Todavía hay?",
@@ -128,7 +128,14 @@
     "noCards": "No cards yet. Type a customer's phone to give their first stamp.",
     "addStamp": "+1 stamp",
     "studioLink": "📊 Cash-up in AG Studio",
-    "studioOpen": "See the full cash-up with charts"
+    "studioOpen": "See the full cash-up with charts",
+    "pinLabel": "Owner PIN",
+    "pinHint": "Enter your PIN to open the panel.",
+    "pinEnter": "Enter",
+    "pinWrong": "Wrong PIN",
+    "pinTooMany": "Too many tries. Wait a minute.",
+    "pinError": "Couldn't sign in. Try again.",
+    "signOut": "Sign out of the panel on this device"
   },
   "studio": {
     "title": "Cash-up",

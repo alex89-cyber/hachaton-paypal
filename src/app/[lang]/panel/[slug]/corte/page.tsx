@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { CashUpStudio } from "@/components/studio/CashUpStudio";
 import { RefreshButton } from "@/components/studio/RefreshButton";
+import { OwnerLogin } from "@/components/OwnerLogin";
 import { getDictionary, hasLocale } from "@/dictionaries";
+import { isOwner } from "@/lib/owner-auth";
 import { cashUpTables } from "@/lib/analytics";
 import { loadStall } from "@/lib/reservations";
 
@@ -27,6 +29,7 @@ async function Report({ params }: { params: PageProps<"/[lang]/panel/[slug]/cort
   const state = await loadStall(slug);
   if (!state) notFound();
   const t = await getDictionary(lang);
+  if (!(await isOwner())) return <OwnerLogin stallName={state.name} t={t} />;
   const day = state.openedAt ?? new Date().toISOString();
   const dateLabel = new Intl.DateTimeFormat(lang === "es" ? "es-MX" : "en-US", {
     weekday: "long",

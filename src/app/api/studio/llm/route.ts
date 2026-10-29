@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import { agentAvailable } from "@/lib/agent";
+import { isOwner, unauthorized } from "@/lib/owner-auth";
 import { studioTurn, type StudioRequest } from "@/lib/studio-llm";
 
 // POST /api/studio/llm  one LLM turn for the AG Studio agents on the cash-up
@@ -22,6 +23,7 @@ function limited(ip: string) {
 
 export async function POST(request: Request) {
   await connection();
+  if (!(await isOwner())) return unauthorized();
   if (!agentAvailable()) return Response.json({ error: "agent_off" }, { status: 503 });
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
   if (limited(ip)) return Response.json({ error: "rate_limited" }, { status: 429 });

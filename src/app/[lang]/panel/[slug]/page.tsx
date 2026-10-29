@@ -1,9 +1,11 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
+import { OwnerLogin } from "@/components/OwnerLogin";
 import { OwnerPanel } from "@/components/OwnerPanel";
 import { getDictionary, hasLocale } from "@/dictionaries";
 import { ownerView } from "@/lib/stall";
+import { demoMode, isOwner, ownerPinRequired } from "@/lib/owner-auth";
 import { loadStall } from "@/lib/reservations";
 
 export default function PanelPage({ params }: PageProps<"/[lang]/panel/[slug]">) {
@@ -23,5 +25,15 @@ async function Panel({ params }: { params: PageProps<"/[lang]/panel/[slug]">["pa
   const state = await loadStall(slug);
   if (!state) notFound();
   const t = await getDictionary(lang);
-  return <OwnerPanel initial={ownerView(state)} lang={lang} timezone={state.timezone} t={t} />;
+  if (!(await isOwner())) return <OwnerLogin stallName={state.name} t={t} />;
+  return (
+    <OwnerPanel
+      initial={ownerView(state)}
+      lang={lang}
+      timezone={state.timezone}
+      t={t}
+      demo={demoMode()}
+      canSignOut={ownerPinRequired()}
+    />
+  );
 }

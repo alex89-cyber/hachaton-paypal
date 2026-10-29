@@ -21,6 +21,23 @@ export type ReserveResult =
   | { ok: false; reason: "closed" | "short"; short?: string[] };
 
 /** Everything the screens need. The demo runs on memory; Supabase implements the same interface. */
+/**
+ * The whole menu as the owner edits it. Ingredients are keyed by their id, or
+ * by "new:N" when just added, and recipes point at those keys. Anything left
+ * out is removed (archived, since past sales still point at it). New
+ * ingredients start with no stock.
+ */
+export type MenuInput = {
+  ingredients: { key: string; name: string; unit: string }[];
+  dishes: {
+    id: string | null;
+    nameEs: string;
+    nameEn: string;
+    priceCents: number;
+    recipe: { ingredient: string; qty: number }[];
+  }[];
+};
+
 export interface StallStore {
   get(slug: string): Promise<StallState | null>;
   open(slug: string, counts: Record<string, number>): Promise<StallState>;
@@ -29,6 +46,8 @@ export interface StallStore {
   setSoldOut(slug: string, dishId: string, soldOut: boolean): Promise<StallState>;
   /** Adds stock mid-day ({ingredientId: amount}); clears "sold out" on dishes made from it. */
   restock(slug: string, adds: Record<string, number>): Promise<{ ok: true; state: StallState } | { ok: false; reason: "closed" }>;
+  /** Replaces dishes, prices, ingredients and recipes (see MenuInput). */
+  saveMenu(slug: string, menu: MenuInput): Promise<StallState>;
   /** Demo only: put the stall back to its seeded state. */
   reset(slug: string): Promise<StallState>;
 

@@ -1,6 +1,6 @@
 import { after, connection } from "next/server";
 import { z } from "zod";
-import { ownerView, phoneCardId, publicSnapshot } from "@/lib/stall";
+import { isActive, ownerView, phoneCardId, publicSnapshot } from "@/lib/stall";
 import { PayPalError } from "@/lib/paypal";
 import { notifyWaiting } from "@/lib/push";
 import { cancel, deliver, loadStall } from "@/lib/reservations";
@@ -24,6 +24,9 @@ export async function GET(request: Request, ctx: RouteContext<"/api/stalls/[slug
   });
 }
 
+/** Units the menu editor offers. */
+const UNITS = ["g", "kg", "ml", "l", "pz"] as const;
+
 const line = z.object({ dishId: z.string().min(1), qty: z.number().int().min(1).max(50) });
 
 const Action = z.discriminatedUnion("action", [
@@ -46,6 +49,24 @@ const Action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("open"), counts: z.record(z.string(), z.number().min(0).max(1_000_000)) }),
   z.object({ action: z.literal("close") }),
   z.object({ action: z.literal("reset") }),
+  z.object({
+    action: z.literal("saveMenu"),
+    ingredients: z
+      .array(z.object({ key: z.string().min(1).max(60), name: z.string().trim().min(1).max(60), unit: z.enum(UNITS) }))
+      .max(60),
+    dishes: z
+      .array(
+        z.object({
+          id: z.string().max(60).nullable(),
+          nameEs: z.string().trim().min(1).max(80),
+          nameEn: z.string().trim().max(80),
+          priceCents: z.number().int().min(0).max(10_000_000),
+          recipe: z.array(z.object({ ingredient: z.string().min(1).max(60), qty: z.number().positive().max(1_000_000) })).max(30),
+        }),
+      )
+      .min(1)
+      .max(60),
+  }),
   z.object({ action: z.literal("deliver"), reservationId: z.string().min(1) }),
   z.object({ action: z.literal("cancelReservation"), reservationId: z.string().min(1) }),
   z.object({ action: z.literal("redeem"), reservationId: z.string().min(1).optional(), cardId: z.string().min(1).optional() }),
@@ -101,6 +122,23 @@ export async function POST(request: Request, ctx: RouteContext<"/api/stalls/[slu
     case "close": {
       const { state, cashUp } = await store.close(slug);
       return Response.json({ ...ownerView(state), closedCashUp: cashUp });
+    }
+    case "saveMenu": {
+      const s = (await store.get(slug))!;
+      const keys = new Set(a.ingredients.map((i) => i.key));
+      const names = new Set(a.ingredients.map((i) => i.name.toLowerCase()));
+      if (names.size !== a.ingredients.length) return Response.json({ error: "duplicate_ingredient" }, { status: 400 });
+      if (a.dishes.some((d) => d.recipe.some((r) => !keys.has(r.ingredient))))
+        return Response.json({ error: "bad_recipe" }, { status: 400 });
+      // A dish someone has reserved can't go: its stock comes back when the hold ends.
+      const kept = new Set(a.dishes.flatMap((d) => (d.id ? [d.id] : [])));
+      const held = s.reservations.filter((r) => isActive(r) && r.lines.some((l) => !kept.has(l.dishId)));
+      if (held.length) return Response.json({ error: "dish_reserved" }, { status: 409 });
+      const next = await store.saveMenu(slug, {
+        ingredients: a.ingredients,
+        dishes: a.dishes.map((d) => ({ ...d, nameEn: d.nameEn || d.nameEs })),
+      });
+      return Response.json(ownerView(next));
     }
     case "reset":
       if (!demoMode()) return Response.json({ error: "demo_off" }, { status: 403 });

@@ -146,5 +146,53 @@
     "refresh": "Refresh",
     "hint": "Move or change any chart, or ask the assistant on the left.",
     "noAi": "The AI assistant isn't set up."
+  },
+  "menu": {
+    "title": "Menu & recipes",
+    "back": "← Panel",
+    "link": "🍽️ Menu & recipes",
+    "intro": "Change your dishes, prices and what each one takes here. Every sale takes from stock what the recipe says.",
+    "ingredients": "Ingredients",
+    "ingredientsHint": "What you buy and count: meat, tortillas, cheese… New ones start at 0: restock or count them when you open.",
+    "ingredientName": "Ingredient name",
+    "unit": "Unit",
+    "units": {
+      "g": "grams (g)",
+      "kg": "kilos (kg)",
+      "ml": "millilitres (ml)",
+      "l": "litres (l)",
+      "pz": "pieces (pz)"
+    },
+    "addIngredient": "+ Add ingredient",
+    "removeIngredient": "Remove ingredient",
+    "removeIngredientConfirm": "{name} will be removed, also from the recipes that use it. Sure?",
+    "dishes": "Dishes",
+    "dishNameEs": "Name (Spanish)",
+    "dishNameEn": "Name in English (optional)",
+    "price": "Price",
+    "recipe": "Recipe: what one portion takes",
+    "recipeEmpty": "A dish without a recipe can't be sold. Add at least one ingredient.",
+    "chooseIngredient": "Choose ingredient",
+    "qty": "Quantity",
+    "addToRecipe": "+ Ingredient",
+    "removeFromRecipe": "Remove from recipe",
+    "addDish": "+ Add dish",
+    "newDish": "New dish",
+    "removeDish": "Remove dish",
+    "removeDishConfirm": "{name} will be removed from the menu. Today's sales stay in the cash-up. Sure?",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "save": "Save changes",
+    "saving": "Saving…",
+    "saved": "Menu saved",
+    "unsaved": "You have unsaved changes",
+    "errors": {
+      "empty_name": "An ingredient or dish has no name.",
+      "duplicate_ingredient": "Two ingredients have the same name.",
+      "bad_qty": "Check the recipe quantities: they must be above 0.",
+      "no_dishes": "The menu needs at least one dish.",
+      "dish_reserved": "You can't remove a dish someone has reserved. Hand it over or cancel it first.",
+      "generic": "Couldn't save. Try again."
+    }
   }
 }

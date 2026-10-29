@@ -196,6 +196,9 @@ export function OwnerPanel({
           <Link href={`/${lang}/panel/${view.slug}/corte`} className="text-sm font-semibold text-brand underline">
             {o.studioLink}
           </Link>
+          <Link href={`/${lang}/panel/${view.slug}/menu`} className="text-sm font-semibold text-brand underline">
+            {t.menu.link}
+          </Link>
         </div>
       </header>
 

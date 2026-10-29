@@ -146,5 +146,53 @@
     "refresh": "Actualizar",
     "hint": "Mueve o cambia cualquier gráfica, o pregúntale al asistente de la izquierda.",
     "noAi": "El asistente de IA no está configurado."
+  },
+  "menu": {
+    "title": "Menú y recetas",
+    "back": "← Panel",
+    "link": "🍽️ Menú y recetas",
+    "intro": "Aquí cambias tus platillos, precios y lo que lleva cada uno. Cada venta descuenta del inventario lo que diga la receta.",
+    "ingredients": "Ingredientes",
+    "ingredientsHint": "Lo que compras y cuentas: carne, tortillas, queso… Los nuevos empiezan en 0: súrtelos o cuéntalos al abrir.",
+    "ingredientName": "Nombre del ingrediente",
+    "unit": "Unidad",
+    "units": {
+      "g": "gramos (g)",
+      "kg": "kilos (kg)",
+      "ml": "mililitros (ml)",
+      "l": "litros (l)",
+      "pz": "piezas (pz)"
+    },
+    "addIngredient": "+ Agregar ingrediente",
+    "removeIngredient": "Quitar ingrediente",
+    "removeIngredientConfirm": "Se quita {name} y también de las recetas que lo usan. ¿Seguro?",
+    "dishes": "Platillos",
+    "dishNameEs": "Nombre",
+    "dishNameEn": "Nombre en inglés (opcional)",
+    "price": "Precio",
+    "recipe": "Receta: qué lleva una porción",
+    "recipeEmpty": "Sin receta no se puede vender. Agrega al menos un ingrediente.",
+    "chooseIngredient": "Elige ingrediente",
+    "qty": "Cantidad",
+    "addToRecipe": "+ Ingrediente",
+    "removeFromRecipe": "Quitar de la receta",
+    "addDish": "+ Agregar platillo",
+    "newDish": "Platillo nuevo",
+    "removeDish": "Quitar platillo",
+    "removeDishConfirm": "Se quita {name} del menú. Las ventas de hoy se quedan en el corte. ¿Seguro?",
+    "moveUp": "Subir",
+    "moveDown": "Bajar",
+    "save": "Guardar cambios",
+    "saving": "Guardando…",
+    "saved": "Menú guardado",
+    "unsaved": "Tienes cambios sin guardar",
+    "errors": {
+      "empty_name": "A un ingrediente o platillo le falta el nombre.",
+      "duplicate_ingredient": "Hay dos ingredientes con el mismo nombre.",
+      "bad_qty": "Revisa las cantidades de las recetas: deben ser mayores a 0.",
+      "no_dishes": "El menú necesita al menos un platillo.",
+      "dish_reserved": "No puedes quitar un platillo que alguien tiene apartado. Entrégalo o cancélalo primero.",
+      "generic": "No se pudo guardar. Intenta otra vez."
+    }
   }
 }

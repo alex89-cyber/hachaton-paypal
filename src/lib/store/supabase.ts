@@ -77,15 +77,30 @@ async function businessBySlug(slug: string): Promise<BusinessRow | null> {
   return check(await db().from("businesses").select("*").eq("slug", slug).maybeSingle(), "business");
 }
 
+/**
+ * Leaves out archived dishes and ingredients (removed in the menu editor). Until
+ * migration 0006 adds the column, the unfiltered query is used.
+ */
+async function activeOnly<R extends { error: { message: string } | null }>(
+  filtered: PromiseLike<R>,
+  all: () => PromiseLike<R>,
+): Promise<R> {
+  const r = await filtered;
+  return r.error?.message.includes("archived") ? all() : r;
+}
+
 async function load(b: BusinessRow): Promise<StallState> {
   const recent = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const [ingRes, dishRes, dayRes, resRes] = await Promise.all([
-    db().from("ingredients").select("id, name, unit, stock").eq("business_id", b.id).order("name"),
+  const ingredientsQ = () => db().from("ingredients").select("id, name, unit, stock").eq("business_id", b.id).order("name");
+  const dishesQ = () =>
     db()
       .from("dishes")
       .select("id, name_es, name_en, price_cents, sold_out, sort, recipe_items(ingredient_id, qty)")
       .eq("business_id", b.id)
-      .order("sort"),
+      .order("sort");
+  const [ingRes, dishRes, dayRes, resRes] = await Promise.all([
+    activeOnly(ingredientsQ().eq("archived", false), ingredientsQ),
+    activeOnly(dishesQ().eq("archived", false), dishesQ),
     db()
       .from("days")
       .select("id, opened_at, opening_count")
@@ -231,6 +246,23 @@ export const supabaseStore: StallStore = {
       throw new Error(`Supabase restock: ${r.error.message}`);
     }
     return { ok: true, state: await load(await must(slug)) };
+  },
+
+  async saveMenu(slug, menu) {
+    const b = await must(slug);
+    const r = await db().rpc("save_menu", {
+      p_business: b.id,
+      p_ingredients: menu.ingredients,
+      p_dishes: menu.dishes.map((d) => ({
+        id: d.id,
+        name_es: d.nameEs,
+        name_en: d.nameEn,
+        price_cents: d.priceCents,
+        recipe: d.recipe,
+      })),
+    });
+    if (r.error) throw new Error(`Supabase save_menu: ${r.error.message}`);
+    return load(await must(slug));
   },
 
   async reset(slug) {

@@ -153,6 +153,27 @@ export const memoryStore: StallStore = {
     return { ok: true, state: withStamps(save(s)) };
   },
 
+  async saveMenu(slug, menu) {
+    const s = must(slug);
+    const ids = new Map<string, string>();
+    const stock = new Map(s.ingredients.map((i) => [i.id, i]));
+    s.ingredients = menu.ingredients.map((i) => {
+      const id = stock.has(i.key) ? i.key : crypto.randomUUID();
+      ids.set(i.key, id);
+      return { id, name: i.name, unit: i.unit, stock: stock.get(i.key)?.stock ?? 0 };
+    });
+    const old = new Map(s.dishes.map((d) => [d.id, d]));
+    s.dishes = menu.dishes.map((d) => ({
+      id: d.id && old.has(d.id) ? d.id : crypto.randomUUID(),
+      nameEs: d.nameEs,
+      nameEn: d.nameEn,
+      priceCents: d.priceCents,
+      soldOut: (d.id && old.get(d.id)?.soldOut) || false,
+      recipe: d.recipe.flatMap((r) => (ids.has(r.ingredient) ? [{ ingredientId: ids.get(r.ingredient)!, qty: r.qty }] : [])),
+    }));
+    return withStamps(save(s));
+  },
+
   async reset(slug) {
     if (slug !== DEMO_SLUG) return must(slug);
     return save(seedDemo());

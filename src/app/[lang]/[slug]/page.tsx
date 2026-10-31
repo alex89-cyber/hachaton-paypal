@@ -12,7 +12,7 @@ import { store } from "@/lib/store";
 
 export default function StallPage({ params, searchParams }: PageProps<"/[lang]/[slug]">) {
   return (
-    <main className="mx-auto w-full max-w-md flex-1 px-4 py-6">
+    <main className="mx-auto w-full max-w-screen-xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
       <Suspense fallback={<p className="text-muted">…</p>}>
         <Stall params={params} searchParams={searchParams} />
       </Suspense>

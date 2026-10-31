@@ -8,9 +8,16 @@ import { ownerView } from "@/lib/stall";
 import { demoMode, isOwner, ownerPinRequired } from "@/lib/owner-auth";
 import { loadStall } from "@/lib/reservations";
 
-export default function PanelPage({ params }: PageProps<"/[lang]/panel/[slug]">) {
+type PanelRouteProps = {
+  params: Promise<{
+    lang: string;
+    slug: string;
+  }>;
+};
+
+export default function PanelPage({ params }: PanelRouteProps) {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col">
+    <main className="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col">
       <Suspense fallback={<p className="p-4 text-muted">…</p>}>
         <Panel params={params} />
       </Suspense>
@@ -18,7 +25,7 @@ export default function PanelPage({ params }: PageProps<"/[lang]/panel/[slug]">)
   );
 }
 
-async function Panel({ params }: { params: PageProps<"/[lang]/panel/[slug]">["params"] }) {
+async function Panel({ params }: { params: PanelRouteProps["params"] }) {
   const { lang, slug } = await params;
   if (!hasLocale(lang)) notFound();
   await connection();

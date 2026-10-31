@@ -242,7 +242,7 @@ export function OwnerPanel({
 
       <h2 className="px-4 pt-5 text-sm font-semibold uppercase tracking-wide text-muted">{o.sell}</h2>
       <p className="px-4 text-sm text-muted">{o.sellHint}</p>
-      <section className="grid grid-cols-2 gap-3 p-4">
+      <section className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {view.dishes.map((d) => {
           const out = d.portions === 0;
           const inTicket = lines.find((l) => l.dishId === d.id)?.qty ?? 0;
@@ -349,8 +349,8 @@ export function OwnerPanel({
       )}
 
       {view.isOpen && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
-          <div className="mx-auto max-w-md">
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-md">
+          <div className="mx-auto w-full max-w-md sm:max-w-xl lg:max-w-3xl">
             {lines.length === 0 ? (
               <p className="py-3 text-center text-muted">{o.empty}</p>
             ) : (

@@ -105,7 +105,6 @@ async function load(b: BusinessRow): Promise<StallState> {
       .from("days")
       .select("id, opened_at, opening_count")
       .eq("business_id", b.id)
-      .is("closed_at", null)
       .order("opened_at", { ascending: false })
       .limit(1)
       .maybeSingle(),

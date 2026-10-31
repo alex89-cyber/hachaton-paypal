@@ -51,7 +51,7 @@ async function Report({ params }: { params: PageProps<"/[lang]/panel/[slug]/cort
         <p className="hidden max-w-md text-xs text-muted lg:block">{t.studio.hint}</p>
         <RefreshButton label={t.studio.refresh} />
       </header>
-      <div className="min-h-0 flex-1 overflow-x-auto">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
         <CashUpStudio tables={cashUpTables(state, lang)} lang={lang} stallName={state.name} dateLabel={dateLabel} />
       </div>
     </>

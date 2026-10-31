@@ -5,7 +5,7 @@ import { AgStudio } from "ag-studio-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CashUpTables } from "@/lib/analytics";
 import { geminiAdapter } from "./geminiAdapter";
-import { cashUpFacts, dataSources, initialReport } from "./report";
+import { cashUpFacts, dataSources, initialReport } from "./report.backup";
 import { ticketWidget, type TicketContext } from "./TicketWidget";
 
 // The cash-up in AG Studio: the day's sales, inventory and reservations, a

@@ -29,8 +29,7 @@ if (license) {
   AgStudioLicenseManager.setLicenseKey(license);
 }
 
-const font =
-  "var(--font-geist-sans), system-ui, sans-serif";
+const font = "var(--font-geist-sans), system-ui, sans-serif";
 
 const theme = studioTheme.withParams({
   fontFamily: font,
@@ -55,7 +54,6 @@ const theme = studioTheme.withParams({
 
   studioWidgetBorderRadius: 14,
   studioWidgetPadding: 10,
-
   studioWidgetTitleFontSize: 16,
   studioWidgetTitleFontWeight: "bold",
   studioWidgetTitleTextColor: "#2a1a14",
@@ -83,12 +81,12 @@ const starters = {
     {
       label: "¿Qué platillo me deja más?",
       prompt:
-        "Según los datos de este reporte, ¿qué platillo generó más ingresos y cuántos vendí? Responde brevemente.",
+        "Según los datos del reporte seleccionado, ¿qué platillo generó más ingresos y cuántos vendí? Responde brevemente.",
     },
     {
       label: "¿Qué se me acaba?",
       prompt:
-        "Si este reporte tiene datos de inventario, dime qué ingredientes tienen menos existencias. Si no hay inventario histórico, indícalo.",
+        "Si este reporte contiene información de inventario, dime qué ingredientes tienen menos existencias. Si no hay datos, indícalo claramente.",
     },
     {
       label: "Efectivo vs PayPal",
@@ -105,17 +103,17 @@ const starters = {
     {
       label: "Which dish earns most?",
       prompt:
-        "Which dish generated the most revenue in this report, and how many were sold? Keep it short.",
+        "Which dish generated the most revenue in the selected report, and how many were sold? Keep it short.",
     },
     {
       label: "What's running out?",
       prompt:
-        "If inventory is available, identify ingredients with low stock. Otherwise explain that inventory data is unavailable.",
+        "If inventory data is available, identify low-stock ingredients. Otherwise explain that inventory data is unavailable.",
     },
     {
       label: "Cash vs PayPal",
       prompt:
-        "Compare recorded cash, card and PayPal sales for the selected report.",
+        "Compare cash, card and PayPal sales for the selected report.",
     },
     {
       label: "My best hour",
@@ -136,12 +134,16 @@ export default function StudioDashboard({
   stallName: string;
   dateLabel: string;
 }) {
-  const [mode] = useState<"edit" | "view">(
-    () =>
-      window.innerWidth < 900
-        ? "view"
-        : "edit",
+  const [mode] = useState<"edit" | "view">(() =>
+    window.innerWidth < 900 ? "view" : "edit",
   );
+
+  // El inventario solo aparece si existen registros.
+  const showInventory = tables.inventario.length > 0;
+
+  // También evitamos presentar como real un contador
+  // de apartados cuando no tenemos esos registros.
+  const showReservations = tables.apartados.length > 0;
 
   const data = useMemo(
     () => dataSources(tables, lang),
@@ -149,8 +151,8 @@ export default function StudioDashboard({
   );
 
   const initialState = useMemo(
-    () => initialReport(lang),
-    [lang],
+    () => initialReport(lang, showInventory, showReservations),
+    [lang, showInventory, showReservations],
   );
 
   const context = useMemo<TicketContext>(
@@ -205,8 +207,18 @@ export default function StudioDashboard({
     [lang, adapter],
   );
 
+  // Al cambiar entre reportes con y sin inventario,
+  // React monta una instancia nueva de AG Studio.
+  const studioKey = [
+    lang,
+    dateLabel,
+    showInventory ? "inventory" : "no-inventory",
+    showReservations ? "reservations" : "no-reservations",
+  ].join("-");
+
   return (
     <AgStudio
+      key={studioKey}
       style={{
         height: "100%",
         width: "100%",

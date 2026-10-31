@@ -33,7 +33,6 @@ const L = {
     platillos: "Platillos",
     creado: "Apartado a las",
 
-    // Titles that also make sense for historical reports.
     kSold: "Total vendido",
     kSales: "Operaciones",
     kDishes: "Platillos vendidos",
@@ -48,7 +47,7 @@ const L = {
     sales: "Detalle de ventas",
 
     describe:
-      "Reporte de ventas de un negocio de comida. Puede incluir la jornada actual, un día histórico, un cierre específico o todas las ventas acumuladas. Muestra ventas por platillo, horarios, métodos de pago, inventario disponible y apartados cuando existan registros.",
+      "Reporte de ventas de un negocio de comida. Incluye ventas por platillo, métodos de pago, horarios e inventario y apartados cuando existen datos disponibles.",
   },
 
   en: {
@@ -90,9 +89,13 @@ const L = {
     sales: "Sales details",
 
     describe:
-      "Restaurant sales report. It may cover the current day, a historical date, an individual closing, or all accumulated sales. Includes dishes, payment methods, sales by hour, inventory and reservations when records exist.",
+      "Restaurant sales report with dishes, payment methods, sales by hour, and inventory and reservations when data is available.",
   },
 };
+
+/* =========================================
+   DATA SOURCES
+========================================= */
 
 export function dataSources(
   t: CashUpTables,
@@ -125,10 +128,10 @@ export function dataSources(
         id: "ventas",
         name: l.ventas,
         description:
-          "One row per dish in a sale. Amount equals the recorded line total in currency units.",
-        data: t.ventas.map((r) => ({
-          ...r,
-          hora: new Date(r.hora),
+          "One row per dish sold. importe is the recorded line amount in currency units.",
+        data: t.ventas.map((row) => ({
+          ...row,
+          hora: new Date(row.hora),
         })),
         fields: [
           {
@@ -176,8 +179,8 @@ export function dataSources(
             id: "apartado",
             name: l.apartado,
             format: "booleanFormat",
-            createValueFormatter: () => (v: unknown) =>
-              v ? l.yes : l.no,
+            createValueFormatter: () => (value: unknown) =>
+              value ? l.yes : l.no,
           },
         ],
       },
@@ -185,7 +188,7 @@ export function dataSources(
         id: "inventario",
         name: l.inventario,
         description:
-          "Recorded ingredient quantities and percentage used. Empty when historical stock information is unavailable.",
+          "Available stock and historical usage, when recorded.",
         data: t.inventario,
         fields: [
           {
@@ -219,8 +222,8 @@ export function dataSources(
             id: "usadoPct",
             name: l.usadoPct,
             format: "integerFormat",
-            createValueFormatter: () => (v: unknown) =>
-              `${Math.round(Number(v ?? 0))}%`,
+            createValueFormatter: () => (value: unknown) =>
+              `${Math.round(Number(value ?? 0))}%`,
           },
         ],
       },
@@ -228,10 +231,10 @@ export function dataSources(
         id: "apartados",
         name: l.apartados,
         description:
-          "Reservation records for the selected report when available.",
-        data: t.apartados.map((r) => ({
-          ...r,
-          creado: new Date(r.creado),
+          "Reservation data available for the report.",
+        data: t.apartados.map((row) => ({
+          ...row,
+          creado: new Date(row.creado),
         })),
         fields: [
           {
@@ -268,6 +271,10 @@ export function dataSources(
   };
 }
 
+/* =========================================
+   STYLES
+========================================= */
+
 const BRAND = "#a3341f";
 
 const title = (text: string, subtitle?: string) => ({
@@ -276,12 +283,7 @@ const title = (text: string, subtitle?: string) => ({
     text,
   },
   ...(subtitle
-    ? {
-        subtitle: {
-          enabled: true,
-          text: subtitle,
-        },
-      }
+    ? { subtitle: { enabled: true, text: subtitle } }
     : {}),
 });
 
@@ -297,7 +299,22 @@ const kpi = (text: string) => ({
   },
 });
 
-export function initialReport(lang: Lang): AgReportState {
+const at = (
+  xTrack: number,
+  yTrack: number,
+  xSpan: number,
+  ySpan: number,
+) => ({ xTrack, yTrack, xSpan, ySpan });
+
+/* =========================================
+   INITIAL DASHBOARD
+========================================= */
+
+export function initialReport(
+  lang: Lang,
+  showInventory = true,
+  showReservations = true,
+): AgReportState {
   const l = L[lang];
 
   const importe = {
@@ -305,208 +322,206 @@ export function initialReport(lang: Lang): AgReportState {
     aggregation: "sum" as const,
   };
 
-  const widgets = {
-    sold: {
-      type: "value",
-      format: {
-        ...kpi(l.kSold),
-        style: {
-          ...kpi(l.kSold).style,
-          sparkline: { type: "bar" },
-        },
-      },
-      dataMapping: {
-        value: [importe],
-        sparklineX: [{ id: "ventas.horaDelDia" }],
+  const sold = {
+    type: "value",
+    format: {
+      ...kpi(l.kSold),
+      style: {
+        ...kpi(l.kSold).style,
+        sparkline: { type: "bar" },
       },
     },
-
-    sales: {
-      type: "value",
-      format: kpi(l.kSales),
-      dataMapping: {
-        value: [
-          {
-            id: "ventas.venta",
-            aggregation: "countd",
-          },
-        ],
-      },
+    dataMapping: {
+      value: [importe],
+      sparklineX: [{ id: "ventas.horaDelDia" }],
     },
+  };
 
-    dishes: {
-      type: "value",
-      format: kpi(l.kDishes),
-      dataMapping: {
-        value: [
-          {
-            id: "ventas.cantidad",
-            aggregation: "sum",
-          },
-        ],
-      },
-    },
-
-    held: {
-      type: "value",
-      format: kpi(l.kHeld),
-      dataMapping: {
-        value: [
-          {
-            id: "apartados.cliente",
-            aggregation: "count",
-          },
-        ],
-      },
-    },
-
-    byDish: {
-      type: "column-chart-grouped",
-      format: title(l.byDish, l.byDishSub),
-      dataMapping: {
-        categoryKey: [{ id: "ventas.platillo" }],
-        valueKey: [importe],
-        tooltipKey: [
-          {
-            id: "ventas.cantidad",
-            aggregation: "sum",
-          },
-        ],
-      },
-      sort: [
+  const sales = {
+    type: "value",
+    format: kpi(l.kSales),
+    dataMapping: {
+      value: [
         {
-          field: importe,
-          direction: "desc",
-        },
-      ],
-    },
-
-    ticket: {
-      type: "cashup-ticket",
-      format: title(l.ticket),
-      dataMapping: {
-        concepto: [{ id: "ventas.metodo" }],
-        importe: [importe],
-      },
-      sort: [
-        {
-          field: importe,
-          direction: "desc",
-        },
-      ],
-    },
-
-    byHour: {
-      type: "line-chart",
-      format: title(l.byHour),
-      dataMapping: {
-        categoryKey: [{ id: "ventas.horaDelDia" }],
-        valueKey: [importe],
-      },
-      sort: [
-        {
-          field: { id: "ventas.horaDelDia" },
-          direction: "asc",
-        },
-      ],
-    },
-
-    byMethod: {
-      type: "donut-chart",
-      format: title(l.byMethod),
-      dataMapping: {
-        categoryKey: [{ id: "ventas.metodo" }],
-        valueKey: [importe],
-      },
-    },
-
-    stock: {
-      type: "bar-chart-grouped",
-      format: title(l.stock, l.stockSub),
-      dataMapping: {
-        categoryKey: [
-          {
-            id: "inventario.ingrediente",
-          },
-        ],
-        valueKey: [
-          {
-            id: "inventario.usadoPct",
-            aggregation: "sum",
-          },
-        ],
-        tooltipKey: [
-          {
-            id: "inventario.usado",
-            aggregation: "sum",
-          },
-          {
-            id: "inventario.queda",
-            aggregation: "sum",
-          },
-        ],
-      },
-      sort: [
-        {
-          field: {
-            id: "inventario.usadoPct",
-            aggregation: "sum",
-          },
-          direction: "desc",
-        },
-      ],
-    },
-
-    detail: {
-      type: "grid",
-      format: title(l.sales),
-      dataMapping: {
-        cols: [
-          { id: "ventas.hora" },
-          { id: "ventas.platillo" },
-          { id: "ventas.cantidad" },
-          { id: "ventas.importe" },
-          { id: "ventas.metodo" },
-          { id: "ventas.apartado" },
-        ],
-      },
-      sort: [
-        {
-          field: { id: "ventas.hora" },
-          direction: "desc",
+          id: "ventas.venta",
+          aggregation: "countd" as const,
         },
       ],
     },
   };
 
-  // 24-column dashboard.
-  // Taller chart areas give the graphs more room.
-  const at = (
-    xTrack: number,
-    yTrack: number,
-    xSpan: number,
-    ySpan: number,
-  ) => ({
-    xTrack,
-    yTrack,
-    xSpan,
-    ySpan,
-  });
+  const dishes = {
+    type: "value",
+    format: kpi(l.kDishes),
+    dataMapping: {
+      value: [
+        {
+          id: "ventas.cantidad",
+          aggregation: "sum" as const,
+        },
+      ],
+    },
+  };
+
+  const held = {
+    type: "value",
+    format: kpi(l.kHeld),
+    dataMapping: {
+      value: [
+        {
+          id: "apartados.cliente",
+          aggregation: "count" as const,
+        },
+      ],
+    },
+  };
+
+  const byDish = {
+    type: "column-chart-grouped",
+    format: title(l.byDish, l.byDishSub),
+    dataMapping: {
+      categoryKey: [{ id: "ventas.platillo" }],
+      valueKey: [importe],
+      tooltipKey: [
+        {
+          id: "ventas.cantidad",
+          aggregation: "sum" as const,
+        },
+      ],
+    },
+    sort: [{ field: importe, direction: "desc" as const }],
+  };
+
+  const ticket = {
+    type: "cashup-ticket",
+    format: title(l.ticket),
+    dataMapping: {
+      concepto: [{ id: "ventas.metodo" }],
+      importe: [importe],
+    },
+    sort: [{ field: importe, direction: "desc" as const }],
+  };
+
+  const byHour = {
+    type: "line-chart",
+    format: title(l.byHour),
+    dataMapping: {
+      categoryKey: [{ id: "ventas.horaDelDia" }],
+      valueKey: [importe],
+    },
+    sort: [
+      {
+        field: { id: "ventas.horaDelDia" },
+        direction: "asc" as const,
+      },
+    ],
+  };
+
+  const byMethod = {
+    type: "donut-chart",
+    format: title(l.byMethod),
+    dataMapping: {
+      categoryKey: [{ id: "ventas.metodo" }],
+      valueKey: [importe],
+    },
+  };
+
+  const stock = {
+    type: "bar-chart-grouped",
+    format: title(l.stock, l.stockSub),
+    dataMapping: {
+      categoryKey: [{ id: "inventario.ingrediente" }],
+      valueKey: [
+        {
+          id: "inventario.usadoPct",
+          aggregation: "sum" as const,
+        },
+      ],
+      tooltipKey: [
+        {
+          id: "inventario.usado",
+          aggregation: "sum" as const,
+        },
+        {
+          id: "inventario.queda",
+          aggregation: "sum" as const,
+        },
+      ],
+    },
+    sort: [
+      {
+        field: {
+          id: "inventario.usadoPct",
+          aggregation: "sum" as const,
+        },
+        direction: "desc" as const,
+      },
+    ],
+  };
+
+  const detail = {
+    type: "grid",
+    format: title(l.sales),
+    dataMapping: {
+      cols: [
+        { id: "ventas.hora" },
+        { id: "ventas.platillo" },
+        { id: "ventas.cantidad" },
+        { id: "ventas.importe" },
+        { id: "ventas.metodo" },
+        { id: "ventas.apartado" },
+      ],
+    },
+    sort: [
+      {
+        field: { id: "ventas.hora" },
+        direction: "desc" as const,
+      },
+    ],
+  };
+
+  // Build a layout without empty inventory or reservation widgets.
+  const widgets = {
+    sold,
+    sales,
+    dishes,
+    ...(showReservations ? { held } : {}),
+    byDish,
+    ticket,
+    byHour,
+    byMethod,
+    ...(showInventory ? { stock } : {}),
+    detail,
+  };
+
+  // The three sales indicators are wide.
+  // Reservations are displayed only when data exists.
+  const topHeight = showReservations ? 20 : 11;
+  const chartsY = topHeight;
 
   const widgetLayout = {
-    sold: at(0, 0, 6, 10),
-    sales: at(6, 0, 6, 10),
-    dishes: at(12, 0, 6, 10),
-    held: at(18, 0, 6, 10),
+    sold: at(0, 0, 8, 11),
+    sales: at(8, 0, 8, 11),
+    dishes: at(16, 0, 8, 11),
 
-    byDish: at(0, 10, 16, 22),
-    ticket: at(16, 10, 8, 22),
+    ...(showReservations
+      ? { held: at(0, 11, 24, 9) }
+      : {}),
 
-    byHour: at(0, 32, 16, 22),
-    byMethod: at(16, 32, 8, 22),
+    byDish: at(0, chartsY, 15, 24),
+    ticket: at(15, chartsY, 9, 24),
 
-    stock: at(0, 54, 24, 18),
-    detail: at(0, 72, 24, 24),
+    byHour: at(0, chartsY + 24, 15, 24),
+    byMethod: at(15, chartsY + 24, 9, 24),
+
+    ...(showInventory
+      ? {
+          stock: at(0, chartsY + 48, 24, 20),
+          detail: at(0, chartsY + 68, 24, 26),
+        }
+      : {
+          detail: at(0, chartsY + 48, 24, 26),
+        }),
   };
 
   return {
@@ -517,44 +532,45 @@ export function initialReport(lang: Lang): AgReportState {
         widgetLayout,
       },
     ],
-
-    // Keep the AI assistant available but narrower.
     panels: {
       filters: { collapsed: true },
       edit: { collapsed: true },
       data: { collapsed: true },
-      ai: { width: 270 },
+      ai: { collapsed: true },
     },
-
     selectedPageId: "corte",
     version: "3.0.0",
   } as unknown as AgReportState;
 }
 
+/* =========================================
+   FACTS FOR AI ASSISTANT
+========================================= */
+
 export function cashUpFacts(t: CashUpTables): string {
-  const money = (n: number) =>
-    `$${Math.round(n).toLocaleString("en-US")} ${t.currency}`;
+  const money = (value: number) =>
+    `$${Math.round(value).toLocaleString("en-US")} ${t.currency}`;
 
   const group = (
     key: "platillo" | "metodo" | "horaDelDia",
   ) => {
-    const result = new Map<
+    const values = new Map<
       string,
       { importe: number; cantidad: number }
     >();
 
     for (const row of t.ventas) {
-      const entry = result.get(row[key]) ?? {
+      const current = values.get(row[key]) ?? {
         importe: 0,
         cantidad: 0,
       };
 
-      entry.importe += row.importe;
-      entry.cantidad += row.cantidad;
-      result.set(row[key], entry);
+      current.importe += row.importe;
+      current.cantidad += row.cantidad;
+      values.set(row[key], current);
     }
 
-    return [...result].sort(
+    return [...values].sort(
       (a, b) => b[1].importe - a[1].importe,
     );
   };
@@ -573,49 +589,56 @@ export function cashUpFacts(t: CashUpTables): string {
       (sum, row) => sum + row.cantidad,
       0,
     )} dishes).`,
-    `Per dish (highest first): ${
+
+    `Per dish: ${
       group("platillo")
         .map(
-          ([name, values]) =>
-            `${name} ${money(values.importe)} (${values.cantidad} sold)`,
+          ([name, value]) =>
+            `${name} ${money(value.importe)} (${value.cantidad} sold)`,
         )
         .join("; ") || "none"
     }.`,
+
     `Per payment method: ${
       group("metodo")
         .map(
-          ([name, values]) =>
-            `${name} ${money(values.importe)}`,
+          ([name, value]) =>
+            `${name} ${money(value.importe)}`,
         )
         .join("; ") || "none"
     }.`,
+
     `Per hour: ${
       group("horaDelDia")
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(
-          ([name, values]) =>
-            `${name} ${money(values.importe)}`,
+          ([hour, value]) =>
+            `${hour} ${money(value.importe)}`,
         )
         .join("; ") || "none"
     }.`,
-    `Ingredients left (lowest share first): ${
-      [...t.inventario]
-        .sort((a, b) => b.usadoPct - a.usadoPct)
-        .map(
-          (r) =>
-            `${r.ingrediente} ${r.queda} ${r.unidad} left of ${r.inicial} (${r.usadoPct}% used)`,
-        )
-        .join("; ") || "none"
+
+    `Inventory records: ${
+      t.inventario.length
+        ? [...t.inventario]
+            .sort((a, b) => b.usadoPct - a.usadoPct)
+            .map(
+              (item) =>
+                `${item.ingrediente}: ${item.queda} ${item.unidad} left, ${item.usadoPct}% used`,
+            )
+            .join("; ")
+        : "not available for this report"
     }.`,
-    `Reservations in selected data: ${
+
+    `Reservation records: ${
       t.apartados.length
         ? t.apartados
             .map(
-              (r) =>
-                `${r.cliente} ${r.estado} ${money(r.importe)}`,
+              (item) =>
+                `${item.cliente}, ${item.estado}, ${money(item.importe)}`,
             )
             .join("; ")
-        : "no records available"
+        : "not available for this report"
     }.`,
   ];
 

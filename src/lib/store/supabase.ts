@@ -212,12 +212,47 @@ export const supabaseStore: StallStore = {
     return load(await must(slug));
   },
 
+  
+
   async close(slug) {
-    const before = await load(await must(slug));
+    const business = await must(slug);
+
+    // Consultar el estado antes de cerrar
+    const before = await load(business);
+
+    // Calcular el corte
     const summary = cashUp(before);
-    check(await db().rpc("close_day", { p_business: (await must(slug)).id }), "close_day");
-    return { state: await load(await must(slug)), cashUp: summary };
+
+    // Guardar los resultados históricos
+    const snapshot = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      summary,
+      dishes: before.dishes,
+      ingredients: before.ingredients,
+      openingCount: before.openingCount,
+    };
+
+    // Cerrar la jornada y guardar el corte
+    const dayId = check(
+      await db().rpc("close_day_with_snapshot", {
+        p_business: business.id,
+        p_snapshot: snapshot,
+      }),
+      "close_day_with_snapshot",
+    ) as string;
+
+    if (!dayId) {
+      throw new Error("No se pudo guardar el cierre");
+    }
+
+    return {
+      state: await load(await must(slug)),
+      cashUp: summary,
+    };
   },
+
+
 
   async recordSale(slug, lines, method): Promise<SaleResult> {
     const b = await must(slug);

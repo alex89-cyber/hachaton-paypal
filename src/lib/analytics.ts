@@ -1,17 +1,19 @@
-// The day's numbers as flat tables for the AG Studio cash-up dashboard. Pure:
-// built on the server from StallState, rendered in the browser by AG Studio.
 
-import { cashUp, type PaymentMethod, type ReservationStatus, type StallState } from "./stall";
+import {
+  cashUp,
+  type PaymentMethod,
+  type ReservationStatus,
+  type StallState,
+} from "./stall";
 
 export type SaleLineRow = {
-  /** One row per dish in a sale, so the same sale can span several rows. */
   venta: string;
-  hora: string; // ISO, turned into a Date in the browser
-  horaDelDia: string; // "14:00", to group by hour
+  hora: string;
+  horaDelDia: string;
   metodo: string;
   platillo: string;
   cantidad: number;
-  importe: number; // in currency units, not cents
+  importe: number;
   apartado: boolean;
 };
 
@@ -21,7 +23,7 @@ export type StockRow = {
   inicial: number;
   usado: number;
   queda: number;
-  usadoPct: number; // 0..100, whole percent
+  usadoPct: number;
 };
 
 export type ReservationRow = {
@@ -29,7 +31,7 @@ export type ReservationRow = {
   estado: string;
   platillos: string;
   importe: number;
-  creado: string; // ISO
+  creado: string;
 };
 
 export type CashUpTables = {
@@ -41,58 +43,244 @@ export type CashUpTables = {
   apartados: ReservationRow[];
 };
 
-const METHOD: Record<"es" | "en", Record<PaymentMethod, string>> = {
-  es: { cash: "Efectivo", card: "Tarjeta", paypal: "PayPal" },
-  en: { cash: "Cash", card: "Card", paypal: "PayPal" },
+export type HistoricalSaleRow = {
+  id: string;
+  day_id: string | null;
+  method: PaymentMethod;
+  total_cents: number;
+  created_at: string;
+  sale_items: {
+    dish_id: string;
+    qty: number;
+    price_cents: number;
+    dishes: {
+      name_es: string;
+      name_en: string;
+    } | null;
+  }[];
 };
 
-const STATUS: Record<"es" | "en", Record<ReservationStatus, string>> = {
-  es: { held: "Esperando pago", authorized: "Pagado, por recoger", captured: "Entregado", voided: "Cancelado", expired: "Vencido" },
-  en: { held: "Awaiting payment", authorized: "Paid, to pick up", captured: "Delivered", voided: "Cancelled", expired: "Expired" },
+export type HistoricalInventoryRow = {
+  ingredientId: string;
+  name: string;
+  unit: string;
+  used: number;
+  left: number;
 };
 
-export function cashUpTables(s: StallState, lang: "es" | "en"): CashUpTables {
-  const dish = new Map(s.dishes.map((d) => [d.id, d]));
+const METHOD: Record<
+  "es" | "en",
+  Record<PaymentMethod, string>
+> = {
+  es: {
+    cash: "Efectivo",
+    card: "Tarjeta",
+    paypal: "PayPal",
+  },
+  en: {
+    cash: "Cash",
+    card: "Card",
+    paypal: "PayPal",
+  },
+};
+
+const STATUS: Record<
+  "es" | "en",
+  Record<ReservationStatus, string>
+> = {
+  es: {
+    held: "Esperando pago",
+    authorized: "Pagado, por recoger",
+    captured: "Entregado",
+    voided: "Cancelado",
+    expired: "Vencido",
+  },
+  en: {
+    held: "Awaiting payment",
+    authorized: "Paid, to pick up",
+    captured: "Delivered",
+    voided: "Cancelled",
+    expired: "Expired",
+  },
+};
+
+function hourFormatter(timezone: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    hourCycle: "h23",
+    timeZone: timezone,
+  });
+}
+
+function makeHour(
+  date: string,
+  formatter: Intl.DateTimeFormat,
+) {
+  return `${formatter.format(new Date(date))}:00`;
+}
+
+function inventoryTables(
+  rows: HistoricalInventoryRow[],
+): StockRow[] {
+  return rows.map((item) => {
+    const inicial = item.used + item.left;
+
+    return {
+      ingrediente: item.name,
+      unidad: item.unit,
+      inicial,
+      usado: item.used,
+      queda: item.left,
+      usadoPct:
+        inicial > 0
+          ? Math.round((item.used / inicial) * 100)
+          : 0,
+    };
+  });
+}
+
+/**
+ * Jornada actual.
+ * Se conserva el comportamiento actual de AG Studio.
+ */
+export function cashUpTables(
+  s: StallState,
+  lang: "es" | "en",
+): CashUpTables {
+  const dish = new Map(
+    s.dishes.map((d) => [d.id, d]),
+  );
+
   const dishName = (id: string) => {
     const d = dish.get(id);
-    return d ? (lang === "es" ? d.nameEs : d.nameEn) : id;
-  };
-  const hour = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: s.timezone });
-  // Sales made from a reservation were paid with PayPal on pickup.
-  const fromReservation = new Set(s.sales.filter((x) => x.method === "paypal").map((x) => x.id));
 
-  const ventas = s.sales.flatMap((sale) =>
-    sale.lines.map((l) => ({
-      venta: sale.id,
-      hora: sale.at,
-      horaDelDia: `${hour.format(new Date(sale.at))}:00`,
-      metodo: METHOD[lang][sale.method],
-      platillo: dishName(l.dishId),
-      cantidad: l.qty,
-      importe: ((dish.get(l.dishId)?.priceCents ?? 0) * l.qty) / 100,
-      apartado: fromReservation.has(sale.id),
+    return d
+      ? lang === "es"
+        ? d.nameEs
+        : d.nameEn
+      : id;
+  };
+
+  const hour = hourFormatter(s.timezone);
+
+  const fromReservation = new Set(
+    s.sales
+      .filter((sale) => sale.method === "paypal")
+      .map((sale) => sale.id),
+  );
+
+  const ventas: SaleLineRow[] = s.sales.flatMap(
+    (sale) =>
+      sale.lines.map((line) => ({
+        venta: sale.id,
+        hora: sale.at,
+        horaDelDia: makeHour(sale.at, hour),
+        metodo: METHOD[lang][sale.method],
+        platillo: dishName(line.dishId),
+        cantidad: line.qty,
+        importe:
+          ((dish.get(line.dishId)?.priceCents ?? 0) *
+            line.qty) /
+          100,
+        apartado: fromReservation.has(sale.id),
+      })),
+  );
+
+  const inventario = inventoryTables(
+    cashUp(s).used.map((item) => ({
+      ingredientId: item.ingredientId,
+      name: item.name,
+      unit: item.unit,
+      used: item.used,
+      left: item.left,
     })),
   );
 
-  const inventario = cashUp(s).used.map((u) => {
-    const inicial = u.used + u.left;
-    return {
-      ingrediente: u.name,
-      unidad: u.unit,
-      inicial,
-      usado: u.used,
-      queda: u.left,
-      usadoPct: inicial > 0 ? Math.round((u.used / inicial) * 100) : 0,
-    };
-  });
+  const apartados: ReservationRow[] =
+    s.reservations.map((reservation) => ({
+      cliente: reservation.customerName,
+      estado: STATUS[lang][reservation.status],
+      platillos: reservation.lines
+        .map(
+          (line) =>
+            `${line.qty} × ${dishName(line.dishId)}`,
+        )
+        .join(", "),
+      importe: reservation.totalCents / 100,
+      creado: reservation.createdAt,
+    }));
 
-  const apartados = s.reservations.map((r) => ({
-    cliente: r.customerName,
-    estado: STATUS[lang][r.status],
-    platillos: r.lines.map((l) => `${l.qty} × ${dishName(l.dishId)}`).join(", "),
-    importe: r.totalCents / 100,
-    creado: r.createdAt,
-  }));
+  return {
+    currency: s.currency,
+    timezone: s.timezone,
+    openedAt: s.openedAt,
+    ventas,
+    inventario,
+    apartados,
+  };
+}
 
-  return { currency: s.currency, timezone: s.timezone, openedAt: s.openedAt, ventas, inventario, apartados };
+/**
+ * Reportes históricos y resumen general.
+ *
+ * Los importes se calculan con el precio real
+ * registrado en sale_items, no el precio actual.
+ */
+export function historicalCashUpTables({
+  sales,
+  currency,
+  timezone,
+  openedAt,
+  lang,
+  inventory = [],
+}: {
+  sales: HistoricalSaleRow[];
+  currency: string;
+  timezone: string;
+  openedAt: string | null;
+  lang: "es" | "en";
+  inventory?: HistoricalInventoryRow[];
+}): CashUpTables {
+  const hour = hourFormatter(timezone);
+
+  const ventas: SaleLineRow[] = sales.flatMap(
+    (sale) =>
+      (sale.sale_items ?? []).map((item) => {
+        const dish = item.dishes;
+
+        const dishName = dish
+          ? lang === "es"
+            ? dish.name_es
+            : dish.name_en
+          : lang === "es"
+            ? "Platillo anterior"
+            : "Previous dish";
+
+        return {
+          venta: sale.id,
+          hora: sale.created_at,
+          horaDelDia: makeHour(
+            sale.created_at,
+            hour,
+          ),
+          metodo: METHOD[lang][sale.method],
+          platillo: dishName,
+          cantidad: item.qty,
+          importe:
+            (item.price_cents * item.qty) / 100,
+          apartado: sale.method === "paypal",
+        };
+      }),
+  );
+
+  return {
+    currency,
+    timezone,
+    openedAt,
+    ventas,
+    inventario: inventoryTables(inventory),
+    // Historical reservations need a separate
+    // attribution query. Do not invent them.
+    apartados: [],
+  };
 }

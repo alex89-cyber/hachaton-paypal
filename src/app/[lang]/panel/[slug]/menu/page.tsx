@@ -1,3 +1,4 @@
+
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
@@ -8,10 +9,10 @@ import { isOwner } from "@/lib/owner-auth";
 import { loadStall } from "@/lib/reservations";
 import { ownerView } from "@/lib/stall";
 
-// The owner edits dishes, prices, ingredients and recipes.
+// Responsive menu editor: wide on desktop, fluid on smaller screens.
 export default function MenuPage({ params }: PageProps<"/[lang]/panel/[slug]/menu">) {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col">
+    <main className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col px-4 py-5 sm:px-6 lg:px-8">
       <Suspense fallback={<p className="p-4 text-muted">…</p>}>
         <Menu params={params} />
       </Suspense>

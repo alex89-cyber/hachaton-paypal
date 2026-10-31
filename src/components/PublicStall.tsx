@@ -1,7 +1,9 @@
 
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import type { Dictionary } from "@/dictionaries";
 import { clock, fill, minutesSince, money } from "@/lib/format";
 import type { PublicSnapshot } from "@/lib/stall";
@@ -23,6 +25,46 @@ export type StampCardInfo = {
 
 const POLL_MS = 5_000;
 const FEW = 5;
+
+/**
+ * Maps the demo dishes to their local photographs.
+ * This does not require database changes.
+ */
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getDishImage(
+  nameEs: string,
+  nameEn: string,
+): string | null {
+  const es = normalize(nameEs);
+  const en = normalize(nameEn);
+
+  if (es.includes("quesabirria") || en.includes("quesabirria")) {
+    return "/menu/quesabirria.jpg";
+  }
+
+  if (
+    es.includes("plato de birria") ||
+    en.includes("birria plate")
+  ) {
+    return "/menu/plato-birria.jpg";
+  }
+
+  if (es.includes("consome") || en.includes("consome")) {
+    return "/menu/consome.jpg";
+  }
+
+  if (es.includes("taco") || en.includes("taco")) {
+    return "/menu/tacos.jpg";
+  }
+
+  return null;
+}
 
 export function PublicStall({
   initial,
@@ -46,23 +88,27 @@ export function PublicStall({
 
   const es = lang === "es";
 
+  // Keep availability synchronized with the business.
   useEffect(() => {
     let alive = true;
 
     const tick = async () => {
       try {
-        const res = await fetch(`/api/stalls/${initial.slug}`, {
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/stalls/${initial.slug}`,
+          { cache: "no-store" },
+        );
 
         if (res.ok && alive) {
           setSnap(await res.json());
         }
       } catch {
-        // Preserve the last valid snapshot.
+        // Keep displaying the last valid snapshot.
       }
 
-      if (alive) setNow(Date.now());
+      if (alive) {
+        setNow(Date.now());
+      }
     };
 
     const id = setInterval(tick, POLL_MS);
@@ -73,84 +119,145 @@ export function PublicStall({
     };
   }, [initial.slug]);
 
+  // A notification that already fired may be requested again.
   useEffect(() => {
     if (!snap.isOpen) return;
 
     forgetWatch(snap.slug, null);
 
-    for (const d of snap.dishes) {
-      if (d.portions > 0) {
-        forgetWatch(snap.slug, d.id);
+    for (const dish of snap.dishes) {
+      if (dish.portions > 0) {
+        forgetWatch(snap.slug, dish.id);
       }
     }
   }, [snap]);
 
   const mins = minutesSince(snap.updatedAt, now);
 
-  const available = snap.dishes.filter((d) => d.portions > 0);
-  const gone = snap.dishes.filter((d) => d.portions === 0);
+  const available = snap.dishes.filter(
+    (dish) => dish.portions > 0,
+  );
+
+  const gone = snap.dishes.filter(
+    (dish) => dish.portions === 0,
+  );
+
   const dishes = [...available, ...gone];
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-8 pb-8">
+    <div className="flex w-full min-w-0 flex-col gap-8 pb-10">
 
-      {/* BUSINESS HEADER */}
-      <header className="relative overflow-hidden rounded-3xl border border-line bg-surface p-6 shadow-sm sm:p-8 lg:p-10">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full bg-brand/10 blur-3xl"
-        />
+      {/* =========================
+          BUSINESS HERO
+      ========================= */}
+      <header className="overflow-hidden rounded-[2rem] border border-line bg-surface shadow-sm">
+        <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
 
-        <div className="relative flex flex-col gap-5">
-          <div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-brand">
-              {es ? "Comida recién hecha" : "Freshly prepared food"}
-            </p>
+          {/* Branding and information */}
+          <div className="flex min-w-0 flex-col justify-center gap-5 px-6 py-8 sm:px-8 sm:py-10 lg:px-10">
 
-            <h1 className="max-w-3xl text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
-              {snap.name}
-            </h1>
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
 
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted sm:text-base">
+              {/* Restaurant logo */}
+              <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-3xl border border-line bg-[#fff9ed] shadow-sm sm:h-36 sm:w-36">
+                <Image
+                  src="/logo-birria-dona-lupe.png"
+                  alt="Logo de Birria Doña Lupe"
+                  fill
+                  sizes="(min-width: 640px) 144px, 128px"
+                  className="object-contain p-1"
+                  priority
+                />
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">
+                  {es
+                    ? "Tradición y sabor casero"
+                    : "Homestyle tradition and flavor"}
+                </p>
+
+                <h1 className="mt-3 break-words text-3xl font-black leading-tight tracking-tight text-[#2e1b14] sm:text-4xl lg:text-[2.7rem]">
+                  {snap.name}
+                </h1>
+              </div>
+            </div>
+
+            <p className="max-w-xl text-sm leading-relaxed text-muted sm:text-base">
               {es
-                ? "Descubre lo que tenemos disponible hoy y aparta tus favoritos de forma sencilla."
-                : "Discover what's available today and reserve your favorites easily."}
+                ? "El sabor de la birria tradicional, preparado para ti. Descubre lo que tenemos disponible y aparta tus favoritos antes de que se acaben."
+                : "The taste of traditional birria, prepared for you. Explore what's available and reserve your favorites before they sell out."}
             </p>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <span
+                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${
+                  snap.isOpen
+                    ? "bg-ok-soft text-ok"
+                    : "bg-bad-soft text-bad"
+                }`}
+              >
+                <span
+                  className={`size-2.5 rounded-full ${
+                    snap.isOpen
+                      ? "animate-pulse bg-ok"
+                      : "bg-bad"
+                  }`}
+                />
+
+                {snap.isOpen ? t.open : t.closed}
+              </span>
+
+              <span className="inline-flex items-center gap-2 rounded-full border border-line bg-background px-4 py-2 text-sm text-muted">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+
+                {mins === 0
+                  ? t.updatedNow
+                  : fill(t.updated, { n: mins })}
+              </span>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <span
-              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${
-                snap.isOpen
-                  ? "bg-ok-soft text-ok"
-                  : "bg-bad-soft text-bad"
-              }`}
-            >
-              <span
-                className={`size-2.5 rounded-full ${
-                  snap.isOpen
-                    ? "animate-pulse bg-ok"
-                    : "bg-bad"
-                }`}
-              />
-              {snap.isOpen ? t.open : t.closed}
-            </span>
+          {/* Hero photograph */}
+          <div className="relative min-h-[240px] overflow-hidden bg-[#f4e5d5] sm:min-h-[320px] lg:min-h-[380px]">
+            <Image
+              src="/menu/plato-birria.jpg"
+              alt={
+                es
+                  ? "Plato de birria tradicional"
+                  : "Traditional birria plate"
+              }
+              fill
+              sizes="(min-width: 1024px) 40vw, 100vw"
+              className="object-cover"
+              priority
+            />
 
-            <span className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-medium text-muted sm:text-sm">
-              <span aria-hidden="true">◷</span>
-              {mins === 0
-                ? t.updatedNow
-                : fill(t.updated, { n: mins })}
-            </span>
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
           </div>
         </div>
       </header>
 
-      {/* PAYMENT / RESERVATION CONFIRMATION */}
+      {/* =========================
+          RESERVATION CONFIRMATION
+      ========================= */}
       {confirmation && (
         <div
           role="status"
-          className={`rounded-2xl border p-5 shadow-sm sm:p-6 ${
+          className={`rounded-3xl border p-5 shadow-sm sm:p-6 ${
             confirmation.kind === "reserved"
               ? "border-ok/20 bg-ok-soft text-ok"
               : "border-warn/20 bg-warn-soft text-warn"
@@ -195,35 +302,62 @@ export function PublicStall({
         </div>
       )}
 
-      {/* MENU */}
+      {/* =========================
+          MENU
+      ========================= */}
       <section className="flex min-w-0 flex-col gap-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-brand">
-              {es ? "Descubre nuestros sabores" : "Explore our flavors"}
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-brand">
+              {es ? "Menú del día" : "Today's menu"}
             </p>
 
-            <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-              {es ? "Nuestro menú" : "Our menu"}
+            <h2 className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl">
+              {es
+                ? "Lo que todavía hay"
+                : "What's still available"}
             </h2>
+
+            <p className="mt-2 max-w-xl text-sm text-muted">
+              {es
+                ? "Elige entre nuestros platillos y consulta su disponibilidad."
+                : "Explore our dishes and check what's available."}
+            </p>
           </div>
 
           {snap.isOpen && (
-            <span className="rounded-full border border-line bg-surface px-4 py-2 text-xs font-semibold text-muted">
+            <span className="rounded-full border border-line bg-surface px-4 py-2 text-xs font-semibold text-muted sm:text-sm">
               {available.length}{" "}
-              {es ? "platillos disponibles" : "dishes available"}
+              {es
+                ? "platillos disponibles"
+                : "dishes available"}
             </span>
           )}
         </div>
 
         {!snap.isOpen ? (
           <div className="flex flex-col gap-4 rounded-3xl border border-line bg-surface p-6 shadow-sm sm:p-8">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-bad-soft text-2xl">
-              ◷
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-bad-soft text-bad">
+              <svg
+                width="26"
+                height="26"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg>
             </div>
 
             <h3 className="text-xl font-bold">
-              {es ? "Por ahora estamos cerrados" : "We're currently closed"}
+              {es
+                ? "Por ahora estamos cerrados"
+                : "We're currently closed"}
             </h3>
 
             <p className="max-w-xl leading-relaxed text-muted">
@@ -244,99 +378,128 @@ export function PublicStall({
             )}
           </div>
         ) : (
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {dishes.map((d) => {
-              const out = d.portions === 0;
-              const few = !out && d.portions <= FEW;
+          <ul className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            {dishes.map((dish) => {
+              const out = dish.portions === 0;
+              const few = !out && dish.portions <= FEW;
+
+              const dishName = es
+                ? dish.nameEs
+                : dish.nameEn;
+
+              const image = getDishImage(
+                dish.nameEs,
+                dish.nameEn,
+              );
 
               return (
                 <li
-                  key={d.id}
-                  className={`group flex min-w-0 flex-col justify-between overflow-hidden rounded-3xl border border-line bg-surface p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-6 ${
+                  key={dish.id}
+                  className={`group overflow-hidden rounded-[1.75rem] border border-line bg-surface shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
                     out ? "opacity-75" : ""
                   }`}
                 >
-                  <div className="space-y-4">
+                  <div className="flex h-full flex-col sm:flex-row">
 
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand/10 text-brand">
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.7"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M4 3v7a3 3 0 0 0 6 0V3" />
-                          <path d="M7 3v18" />
-                          <path d="M20 3c-3 3-4 6-4 10h4V3Z" />
-                          <path d="M20 13v8" />
-                        </svg>
-                      </div>
-
-                      <span
-                        className={`max-w-[65%] rounded-full px-3 py-1.5 text-center text-xs font-bold ${
-                          out
-                            ? "bg-bad-soft text-bad"
-                            : few
-                              ? "bg-warn-soft text-warn"
-                              : "bg-ok-soft text-ok"
-                        }`}
-                      >
-                        {out
-                          ? t.soldOut
-                          : few
-                            ? t.fewLeft
-                            : fill(t.left, { n: d.portions })}
-                      </span>
-                    </div>
-
-                    <div>
-                      <h3
-                        className={`break-words text-lg font-bold leading-snug sm:text-xl ${
-                          out ? "line-through" : ""
-                        }`}
-                      >
-                        {es ? d.nameEs : d.nameEn}
-                      </h3>
-
-                      <p className="mt-2 text-sm text-muted">
-                        {out
-                          ? es
-                            ? "No disponible por el momento"
-                            : "Currently unavailable"
-                          : es
-                            ? "Preparado para ti"
-                            : "Made for you"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 border-t border-line pt-4">
-                    <div className="flex flex-wrap items-end justify-between gap-3">
-                      <div>
-                        <p className="mb-1 text-xs font-medium text-muted">
-                          {es ? "Precio" : "Price"}
-                        </p>
-
-                        <p className="text-2xl font-extrabold tracking-tight text-brand">
-                          {money(d.priceCents, snap.currency, lang)}
-                        </p>
-                      </div>
-
-                      {out && vapidKey && (
-                        <NotifyButton
-                          slug={snap.slug}
-                          dishId={d.id}
-                          lang={lang}
-                          vapidKey={vapidKey}
-                          t={t}
+                    {/* Dish photo */}
+                    <div className="relative h-56 shrink-0 overflow-hidden bg-[#f2e5d8] sm:h-auto sm:w-[42%]">
+                      {image ? (
+                        <Image
+                          src={image}
+                          alt={dishName}
+                          fill
+                          sizes="(min-width: 1024px) 22vw, (min-width: 640px) 42vw, 100vw"
+                          className={`object-cover transition-transform duration-300 group-hover:scale-105 ${
+                            out ? "grayscale" : ""
+                          }`}
                         />
+                      ) : (
+                        <div className="flex h-full min-h-[200px] items-center justify-center bg-brand/10 text-brand">
+                          <svg
+                            width="44"
+                            height="44"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M4 3v7a3 3 0 0 0 6 0V3" />
+                            <path d="M7 3v18" />
+                            <path d="M20 3c-3 3-4 6-4 10h4V3Z" />
+                            <path d="M20 13v8" />
+                          </svg>
+                        </div>
                       )}
+                    </div>
+
+                    {/* Dish information */}
+                    <div className="flex min-w-0 flex-1 flex-col justify-between gap-5 p-5 sm:p-6">
+                      <div>
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${
+                            out
+                              ? "bg-bad-soft text-bad"
+                              : few
+                                ? "bg-warn-soft text-warn"
+                                : "bg-ok-soft text-ok"
+                          }`}
+                        >
+                          {out
+                            ? t.soldOut
+                            : few
+                              ? t.fewLeft
+                              : fill(t.left, {
+                                  n: dish.portions,
+                                })}
+                        </span>
+
+                        <h3
+                          className={`mt-4 break-words text-xl font-extrabold leading-tight text-[#2e1b14] sm:text-2xl ${
+                            out ? "line-through" : ""
+                          }`}
+                        >
+                          {dishName}
+                        </h3>
+
+                        <p className="mt-2 text-sm leading-relaxed text-muted">
+                          {out
+                            ? es
+                              ? "Agotado por el momento."
+                              : "Currently sold out."
+                            : es
+                              ? "Consulta y aparta este platillo con nuestro asistente."
+                              : "Ask our assistant to reserve this dish."}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-end justify-between gap-3 border-t border-line pt-4">
+                        <div>
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                            {es ? "Precio" : "Price"}
+                          </p>
+
+                          <p className="text-2xl font-black tracking-tight text-brand">
+                            {money(
+                              dish.priceCents,
+                              snap.currency,
+                              lang,
+                            )}
+                          </p>
+                        </div>
+
+                        {out && vapidKey && (
+                          <NotifyButton
+                            slug={snap.slug}
+                            dishId={dish.id}
+                            lang={lang}
+                            vapidKey={vapidKey}
+                            t={t}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 </li>
@@ -346,25 +509,31 @@ export function PublicStall({
         )}
       </section>
 
-      {/* ORDER ASSISTANT */}
+      {/* =========================
+          ORDER ASSISTANT
+      ========================= */}
       <section className="min-w-0 space-y-4">
         <div>
-          <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-brand">
-            {es ? "Te ayudamos a elegir" : "We're here to help"}
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-brand">
+            {es
+              ? "Estamos para ayudarte"
+              : "We're here to help"}
           </p>
 
-          <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-            {es ? "Haz tu pedido" : "Place your order"}
+          <h2 className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl">
+            {es
+              ? "Haz tu apartado"
+              : "Reserve your order"}
           </h2>
 
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
             {es
-              ? "Utiliza nuestro asistente para consultar el menú y realizar tu apartado."
-              : "Use our assistant to explore the menu and reserve your food."}
+              ? "Pregunta por tus platillos favoritos, revisa su disponibilidad y solicita tu apartado."
+              : "Ask about your favorite dishes, check availability and request your reservation."}
           </p>
         </div>
 
-        <div className="min-w-0 overflow-hidden rounded-3xl border border-line bg-surface shadow-sm">
+        <div className="min-w-0 overflow-hidden rounded-[1.75rem] border border-line bg-surface shadow-sm">
           <AgentChat
             slug={snap.slug}
             lang={lang}
@@ -376,16 +545,22 @@ export function PublicStall({
         </div>
       </section>
 
-      {/* LOYALTY CARD */}
+      {/* =========================
+          LOYALTY / STAMP CARD
+      ========================= */}
       {stampCard && (
         <section className="min-w-0 space-y-4">
           <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-brand">
-              {es ? "Gracias por volver" : "Thanks for coming back"}
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-brand">
+              {es
+                ? "Gracias por tu preferencia"
+                : "Thanks for choosing us"}
             </p>
 
-            <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-              {es ? "Tus recompensas" : "Your rewards"}
+            <h2 className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl">
+              {es
+                ? "Tus recompensas"
+                : "Your rewards"}
             </h2>
           </div>
 
@@ -397,6 +572,7 @@ export function PublicStall({
         </section>
       )}
 
+      {/* FOOTER */}
       <footer className="border-t border-line pt-6 text-center">
         <p className="text-xs text-muted">
           {t.madeWith}
@@ -416,17 +592,23 @@ function StampCard({
   t: Dictionary;
 }) {
   const p = t.public;
+
   const [phone, setPhone] = useState("");
   const [bad, setBad] = useState(false);
 
-  async function lookUp(e: React.FormEvent) {
+  async function lookUp(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const res = await fetch(`/api/stalls/${slug}/card`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone }),
-    }).catch(() => null);
+    const res = await fetch(
+      `/api/stalls/${slug}/card`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phone }),
+      },
+    ).catch(() => null);
 
     if (res?.ok) {
       location.reload();
@@ -446,8 +628,10 @@ function StampCard({
 
   return (
     <section
-      className={`flex flex-col gap-5 rounded-3xl border border-line p-5 shadow-sm sm:p-7 ${
-        ready ? "bg-warn-soft" : "bg-surface"
+      className={`flex flex-col gap-5 rounded-[1.75rem] border border-line p-5 shadow-sm sm:p-7 ${
+        ready
+          ? "bg-warn-soft"
+          : "bg-surface"
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -455,7 +639,7 @@ function StampCard({
           {p.stampsTitle}
         </h3>
 
-        <div className="rounded-full border border-line px-4 py-2 text-sm font-bold">
+        <div className="rounded-full border border-line bg-background/70 px-4 py-2 text-sm font-bold">
           {have} / {card.perReward}
         </div>
       </div>
@@ -464,34 +648,45 @@ function StampCard({
         className="grid grid-cols-5 gap-2 sm:grid-cols-10"
         aria-label={fill(p.stampsCount, vars)}
       >
-        {Array.from({ length: card.perReward }, (_, i) => (
-          <li
-            key={i}
-            className={`flex aspect-square items-center justify-center rounded-full border-2 text-lg font-bold transition-colors ${
-              i < have
-                ? "border-brand bg-brand text-white"
-                : "border-dashed border-line text-muted"
-            }`}
-          >
-            {i < have
-              ? "★"
-              : i === card.perReward - 1
-                ? "🎁"
-                : ""}
-          </li>
-        ))}
+        {Array.from(
+          { length: card.perReward },
+          (_, i) => (
+            <li
+              key={i}
+              className={`flex aspect-square items-center justify-center rounded-full border-2 text-lg font-bold transition-colors ${
+                i < have
+                  ? "border-brand bg-brand text-white"
+                  : "border-dashed border-line text-muted"
+              }`}
+            >
+              {i < have
+                ? "★"
+                : i === card.perReward - 1
+                  ? "🎁"
+                  : ""}
+            </li>
+          ),
+        )}
       </ol>
 
       <p
         className={`text-sm leading-relaxed ${
-          ready ? "font-semibold text-warn" : "text-muted"
+          ready
+            ? "font-semibold text-warn"
+            : "text-muted"
         }`}
       >
         {ready
           ? fill(p.stampsReady, vars)
           : card.have === null
             ? fill(p.stampsHowTo, vars)
-            : `${fill(p.stampsCount, vars)} ${fill(p.stampsHowTo, vars)}`}
+            : `${fill(
+                p.stampsCount,
+                vars,
+              )} ${fill(
+                p.stampsHowTo,
+                vars,
+              )}`}
       </p>
 
       {card.have === null && (
@@ -512,7 +707,10 @@ function StampCard({
               value={phone}
               onChange={(e) => {
                 setPhone(
-                  e.target.value.replace(/[^\d +()-]/g, ""),
+                  e.target.value.replace(
+                    /[^\d +()-]/g,
+                    "",
+                  ),
                 );
                 setBad(false);
               }}
@@ -524,7 +722,9 @@ function StampCard({
 
             <button
               type="submit"
-              disabled={phone.replace(/\D/g, "").length < 10}
+              disabled={
+                phone.replace(/\D/g, "").length < 10
+              }
               className="rounded-2xl bg-brand px-6 py-3 font-bold text-white transition-opacity hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {p.stampsPhoneButton}

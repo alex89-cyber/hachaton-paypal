@@ -1,13 +1,36 @@
-import type { OrderLine } from "../inventory";
-import type { CashUp, PaymentMethod, Reservation, StallState } from "../stall";
 
-export type SaleResult = { ok: true; state: StallState } | { ok: false; reason: "closed" | "short"; short?: string[] };
+import type { OrderLine } from "../inventory";
+import type {
+  CashUp,
+  PaymentMethod,
+  Reservation,
+  StallSettings,
+  StallState,
+} from "../stall";
+
+export type SaleResult =
+  | { ok: true; state: StallState }
+  | {
+      ok: false;
+      reason: "closed" | "short";
+      short?: string[];
+    };
 
 export type RedeemResult =
   | { ok: true; stampsLeft: number }
-  | { ok: false; reason: "closed" | "short" | "not_enough" | "no_reward" };
+  | {
+      ok: false;
+      reason:
+        | "closed"
+        | "short"
+        | "not_enough"
+        | "no_reward";
+    };
 
-/** A browser push subscription waiting for the stall to open (dishId null) or a dish to come back. */
+/**
+ * A browser push subscription waiting for the stall
+ * to open (dishId null) or a dish to come back.
+ */
 export type Watch = {
   dishId: string | null;
   endpoint: string;
@@ -18,60 +41,240 @@ export type Watch = {
 
 export type ReserveResult =
   | { ok: true; reservation: Reservation }
-  | { ok: false; reason: "closed" | "short"; short?: string[] };
+  | {
+      ok: false;
+      reason: "closed" | "short";
+      short?: string[];
+    };
 
-/** Everything the screens need. The demo runs on memory; Supabase implements the same interface. */
 /**
- * The whole menu as the owner edits it. Ingredients are keyed by their id, or
- * by "new:N" when just added, and recipes point at those keys. Anything left
- * out is removed (archived, since past sales still point at it). New
- * ingredients start with no stock.
+ * The whole menu as the owner edits it.
+ *
+ * Ingredients are keyed by their id, or by "new:N"
+ * when just added, and recipes point at those keys.
+ *
+ * Anything left out is removed (archived, since
+ * past sales still point at it).
+ *
+ * New ingredients start with no stock.
  */
 export type MenuInput = {
-  ingredients: { key: string; name: string; unit: string }[];
+  ingredients: {
+    key: string;
+    name: string;
+    unit: string;
+  }[];
+
   dishes: {
     id: string | null;
     nameEs: string;
     nameEn: string;
     imageUrl: string | null;
     priceCents: number;
-    recipe: { ingredient: string; qty: number }[];
+
+    recipe: {
+      ingredient: string;
+      qty: number;
+    }[];
   }[];
 };
 
+/**
+ * Configuración del negocio.
+ *
+ * El nombre se guarda por separado porque ya existe
+ * como propiedad principal en StallState.
+ *
+ * El resto de los campos corresponden a StallSettings.
+ */
+export type SettingsInput = {
+  name: string;
+  settings: StallSettings;
+};
+
+/**
+ * Everything the screens need.
+ *
+ * The demo runs on memory.
+ * Supabase implements the same interface.
+ */
 export interface StallStore {
   get(slug: string): Promise<StallState | null>;
-  open(slug: string, counts: Record<string, number>): Promise<StallState>;
-  close(slug: string): Promise<{ state: StallState; cashUp: CashUp }>;
-  recordSale(slug: string, lines: OrderLine[], method: PaymentMethod): Promise<SaleResult>;
-  setSoldOut(slug: string, dishId: string, soldOut: boolean): Promise<StallState>;
-  /** Adds stock mid-day ({ingredientId: amount}); clears "sold out" on dishes made from it. */
-  restock(slug: string, adds: Record<string, number>): Promise<{ ok: true; state: StallState } | { ok: false; reason: "closed" }>;
-  /** Replaces dishes, prices, ingredients and recipes (see MenuInput). */
-  saveMenu(slug: string, menu: MenuInput): Promise<StallState>;
-  /** Demo only: put the stall back to its seeded state. */
-  reset(slug: string): Promise<StallState>;
 
-  // Reservations. Stock is taken when the reservation is made and given back
-  // if it is voided or expires; delivering turns it into a PayPal sale.
-  reserve(slug: string, customerName: string, lines: OrderLine[], pickupBy: Date): Promise<ReserveResult>;
-  getReservation(slug: string, id: string): Promise<Reservation | null>;
-  setPayPalOrder(slug: string, id: string, orderId: string): Promise<void>;
-  markAuthorized(slug: string, id: string, authorizationId: string, payerId: string | null): Promise<void>;
-  /** authorized → captured, recording the sale. False if it was not authorized. */
-  markDelivered(slug: string, id: string): Promise<boolean>;
-  /** held/authorized → voided/expired, giving the stock back. False if it was already finished. */
-  release(slug: string, id: string, status: "voided" | "expired"): Promise<boolean>;
+  open(
+    slug: string,
+    counts: Record<string, number>,
+  ): Promise<StallState>;
 
-  // Stamp card. Delivering a reservation with a payer adds the stamp.
-  stamps(slug: string, cardId: string): Promise<number>;
-  /** One stamp on a card (created if new). Returns the stamps it now has. */
-  addStamp(slug: string, cardId: string, label: string | null): Promise<number>;
-  /** Spends a reward's stamps and takes the reward dish out of stock. */
-  redeem(slug: string, cardId: string): Promise<RedeemResult>;
+  close(
+    slug: string,
+  ): Promise<{
+    state: StallState;
+    cashUp: CashUp;
+  }>;
 
-  // "Avísame cuando haya".
-  addWatch(slug: string, watch: Watch): Promise<void>;
-  /** Removes and returns the watches that are due: all "opens" ones if open, plus those for these dishes. */
-  claimWatches(slug: string, open: boolean, dishIds: string[]): Promise<Watch[]>;
+  recordSale(
+    slug: string,
+    lines: OrderLine[],
+    method: PaymentMethod,
+  ): Promise<SaleResult>;
+
+  setSoldOut(
+    slug: string,
+    dishId: string,
+    soldOut: boolean,
+  ): Promise<StallState>;
+
+  /**
+   * Adds stock mid-day ({ ingredientId: amount });
+   * clears "sold out" on dishes made from it.
+   */
+  restock(
+    slug: string,
+    adds: Record<string, number>,
+  ): Promise<
+    | { ok: true; state: StallState }
+    | { ok: false; reason: "closed" }
+  >;
+
+  /**
+   * Replaces dishes, prices, ingredients and recipes.
+   */
+  saveMenu(
+    slug: string,
+    menu: MenuInput,
+  ): Promise<StallState>;
+
+  /**
+   * PERSONALIZACIÓN DEL NEGOCIO.
+   *
+   * Guarda nombre, identidad visual, imágenes,
+   * descripción, ubicación, redes sociales,
+   * horarios y preferencias de presentación.
+   *
+   * Por ahora es opcional para permitir agregar
+   * la implementación a memory.ts y supabase.ts
+   * sin romper las funciones existentes.
+   *
+   * Cuando ambos almacenes lo implementen,
+   * lo convertiremos en obligatorio.
+   */
+  saveSettings?(
+    slug: string,
+    input: SettingsInput,
+  ): Promise<StallState>;
+
+  /**
+   * Demo only: put the stall back to its seeded state.
+   */
+  reset(
+    slug: string,
+  ): Promise<StallState>;
+
+  // ==========================================
+  // RESERVATIONS
+  // ==========================================
+
+  /**
+   * Stock is taken when a reservation is made
+   * and given back if voided or expired.
+   *
+   * Delivering turns it into a PayPal sale.
+   */
+  reserve(
+    slug: string,
+    customerName: string,
+    lines: OrderLine[],
+    pickupBy: Date,
+  ): Promise<ReserveResult>;
+
+  getReservation(
+    slug: string,
+    id: string,
+  ): Promise<Reservation | null>;
+
+  setPayPalOrder(
+    slug: string,
+    id: string,
+    orderId: string,
+  ): Promise<void>;
+
+  markAuthorized(
+    slug: string,
+    id: string,
+    authorizationId: string,
+    payerId: string | null,
+  ): Promise<void>;
+
+  /**
+   * authorized -> captured, recording the sale.
+   * False if it was not authorized.
+   */
+  markDelivered(
+    slug: string,
+    id: string,
+  ): Promise<boolean>;
+
+  /**
+   * held/authorized -> voided/expired,
+   * giving the stock back.
+   *
+   * False if it was already finished.
+   */
+  release(
+    slug: string,
+    id: string,
+    status: "voided" | "expired",
+  ): Promise<boolean>;
+
+  // ==========================================
+  // STAMP CARDS
+  // ==========================================
+
+  stamps(
+    slug: string,
+    cardId: string,
+  ): Promise<number>;
+
+  /**
+   * One stamp on a card (created if new).
+   * Returns the stamps it now has.
+   */
+  addStamp(
+    slug: string,
+    cardId: string,
+    label: string | null,
+  ): Promise<number>;
+
+  /**
+   * Spends a reward's stamps and takes
+   * the reward dish out of stock.
+   */
+  redeem(
+    slug: string,
+    cardId: string,
+  ): Promise<RedeemResult>;
+
+  // ==========================================
+  // PUSH NOTIFICATIONS
+  // ==========================================
+
+  /**
+   * "Avísame cuando haya".
+   */
+  addWatch(
+    slug: string,
+    watch: Watch,
+  ): Promise<void>;
+
+  /**
+   * Removes and returns the watches that are due:
+   * all "opens" ones if open, plus those
+   * for these dishes.
+   */
+  claimWatches(
+    slug: string,
+    open: boolean,
+    dishIds: string[],
+  ): Promise<Watch[]>;
 }

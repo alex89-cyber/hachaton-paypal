@@ -246,12 +246,13 @@ export function OwnerPanel({
                   </span>
                 ) : (
                   <Image
-                    src="/logo-birria-dona-lupe.png"
-                    alt="Logo de Birria Doña Lupe"
+                    src={view.settings?.logoUrl || "/logo-birria-dona-lupe.png"}
+                    alt={`Logo de ${view.name}`}
                     fill
                     sizes="(min-width: 640px) 112px, 80px"
                     className="object-contain p-1"
                     onError={() => setLogoFailed(true)}
+                    unoptimized={Boolean(view.settings?.logoUrl)}
                   />
                 )}
               </div>
@@ -321,6 +322,7 @@ export function OwnerPanel({
             >
               {es ? "English" : "Español"}
             </Link>
+
             <Link
               href={`/${lang}/${view.slug}`}
               target="_blank"
@@ -341,6 +343,29 @@ export function OwnerPanel({
               className="inline-flex items-center gap-2 rounded-xl border border-[#eaded3] bg-white px-4 py-3 text-sm font-semibold text-[#4b3024] shadow-sm transition hover:border-brand hover:text-brand"
             >
               {t.menu.link}
+            </Link>
+
+            {/* NUEVO: CONFIGURACIÓN DEL NEGOCIO */}
+            <Link
+              href={`/${lang}/panel/${view.slug}/configuracion`}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#eaded3] bg-white px-4 py-3 text-sm font-semibold text-[#4b3024] shadow-sm transition hover:border-brand hover:text-brand"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                <circle cx="12" cy="12" r="8" />
+              </svg>
+              {es ? "Configuración" : "Settings"}
             </Link>
 
             <div className="hidden flex-1 lg:block" />
@@ -1214,7 +1239,7 @@ function CashUpDialog({
         href={`/${lang}/panel/${slug}/corte`}
         className="mt-7 block w-full rounded-2xl border-2 border-brand py-3 text-center font-bold text-brand"
       >
-         {o.studioOpen}
+        {o.studioOpen}
       </Link>
 
       <button

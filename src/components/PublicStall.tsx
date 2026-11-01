@@ -3,22 +3,31 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { CSSProperties, FormEvent } from "react";
 
 import type { Dictionary } from "@/dictionaries";
+
 import {
   clock,
   fill,
   minutesSince,
   money,
 } from "@/lib/format";
-import type { PublicSnapshot } from "@/lib/stall";
+
+import type {
+  PublicSnapshot,
+} from "@/lib/stall";
 
 import { AgentChat } from "./AgentChat";
+
 import {
   NotifyButton,
   forgetWatch,
 } from "./NotifyButton";
+
+// ==========================================
+// TIPOS ORIGINALES
+// ==========================================
 
 export type Confirmation =
   | {
@@ -27,8 +36,12 @@ export type Confirmation =
       pickupBy: string;
       totalCents: number;
     }
-  | { kind: "cancelled" }
-  | { kind: "error" };
+  | {
+      kind: "cancelled";
+    }
+  | {
+      kind: "error";
+    };
 
 export type StampCardInfo = {
   have: number | null;
@@ -39,6 +52,10 @@ export type StampCardInfo = {
 const POLL_MS = 5_000;
 const FEW = 5;
 
+// ==========================================
+// FUNCIONES PARA FOTOGRAFÍAS
+// ==========================================
+
 function normalize(text: string): string {
   return text
     .toLowerCase()
@@ -47,7 +64,9 @@ function normalize(text: string): string {
 }
 
 // Fotografías originales de demostración.
-// Se utilizan solo cuando no hay foto del dueño.
+// Se utilizan solo para Birria Doña Lupe
+// cuando no hay foto subida por el dueño.
+
 function getDemoDishImage(
   nameEs: string,
   nameEn: string,
@@ -86,6 +105,10 @@ function getDemoDishImage(
   return null;
 }
 
+// ==========================================
+// IMÁGENES DEL MENÚ
+// ==========================================
+
 function DishImage({
   imageUrl,
   fallback,
@@ -100,7 +123,9 @@ function DishImage({
   const [failed, setFailed] = useState(false);
 
   const customImage =
-    imageUrl && !failed ? imageUrl : null;
+    imageUrl && !failed
+      ? imageUrl
+      : null;
 
   if (customImage) {
     return (
@@ -155,6 +180,101 @@ function DishImage({
   );
 }
 
+// ==========================================
+// IMAGEN PERSONALIZADA CON RESPALDO
+// ==========================================
+
+function CustomImage({
+  src,
+  fallback,
+  alt,
+  className,
+}: {
+  src: string | null | undefined;
+  fallback: string | null;
+  alt: string;
+  className: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  const custom =
+    src && !failed
+      ? src
+      : null;
+
+  if (custom) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        key={custom}
+        src={custom}
+        alt={alt}
+        className={className}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  if (fallback) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={fallback}
+        alt={alt}
+        className={className}
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-[#fff4e4] text-5xl">
+      🍽️
+    </div>
+  );
+}
+
+// ==========================================
+// VALIDACIONES VISUALES
+// ==========================================
+
+function safeColor(
+  value: string | undefined,
+): string | undefined {
+  if (
+    value &&
+    /^#[0-9a-fA-F]{6}$/.test(value)
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function safeUrl(
+  value: string | null | undefined,
+): string | null {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+
+    if (
+      url.protocol === "https:" ||
+      url.protocol === "http:"
+    ) {
+      return url.toString();
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+// ==========================================
+// PÁGINA PÚBLICA ORIGINAL
+// ==========================================
+
 export function PublicStall({
   initial,
   lang,
@@ -177,7 +297,175 @@ export function PublicStall({
 
   const es = lang === "es";
 
-  // Mantener disponibilidad e imágenes actualizadas.
+  // ========================================
+  // CONFIGURACIÓN PERSONALIZADA
+  // ========================================
+
+  const settings = snap.settings;
+  const theme = settings?.theme;
+
+  const isDemo =
+    snap.slug === "birria-dona-lupe";
+
+  // Mantener los valores originales si el dueño
+  // aún no ha personalizado la página.
+
+  const logoFallback = isDemo
+    ? "/logo-birria-dona-lupe.png"
+    : null;
+
+  const coverFallback = isDemo
+    ? "/menu/plato-birria.jpg"
+    : null;
+
+  const logoUrl = safeUrl(
+    settings?.logoUrl,
+  );
+
+  const coverUrl = safeUrl(
+    settings?.coverUrl,
+  );
+
+  const tagline =
+    (es
+      ? settings?.taglineEs
+      : settings?.taglineEn) ||
+    (isDemo
+      ? es
+        ? "Tradición y sabor casero"
+        : "Homestyle tradition and flavor"
+      : "");
+
+  const description =
+    (es
+      ? settings?.descriptionEs
+      : settings?.descriptionEn) ||
+    (isDemo
+      ? es
+        ? "El sabor de la birria tradicional, preparado para ti. Descubre lo que tenemos disponible y aparta tus favoritos antes de que se acaben."
+        : "The taste of traditional birria, prepared for you. Explore what's available and reserve your favorites before they sell out."
+      : "");
+
+  const welcomeMessage =
+    es
+      ? settings?.welcomeMessageEs
+      : settings?.welcomeMessageEn;
+
+  const primaryColor = safeColor(
+    theme?.primaryColor,
+  );
+
+  const secondaryColor = safeColor(
+    theme?.secondaryColor,
+  );
+
+  const textColor = safeColor(
+    theme?.textColor,
+  );
+
+  const backgroundColor = safeColor(
+    theme?.backgroundColor,
+  );
+
+  const buttonColor = safeColor(
+    theme?.buttonColor,
+  );
+
+  // La página conserva su estilo original
+  // cuando no hay preferencias configuradas.
+
+  const fontFamily =
+    theme?.typography === "classic"
+      ? 'Georgia, "Times New Roman", serif'
+      : theme?.typography === "elegant"
+        ? '"Palatino Linotype", Georgia, serif'
+        : theme?.typography === "rounded"
+          ? '"Trebuchet MS", Arial, sans-serif'
+          : undefined;
+
+  const styles = {
+    ...(fontFamily
+      ? { fontFamily }
+      : {}),
+
+    ...(backgroundColor
+      ? { backgroundColor }
+      : {}),
+
+    ...(primaryColor
+      ? {
+          "--brand-custom": primaryColor,
+        }
+      : {}),
+
+    ...(secondaryColor
+      ? {
+          "--secondary-custom": secondaryColor,
+        }
+      : {}),
+
+    ...(buttonColor
+      ? {
+          "--button-custom": buttonColor,
+        }
+      : {}),
+  } as CSSProperties;
+
+  const location = [
+    settings?.address,
+    settings?.city,
+    settings?.state,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const mapsUrl = safeUrl(
+    settings?.googleMapsUrl,
+  );
+
+  const gallery = (
+    settings?.galleryUrls ?? []
+  )
+    .map(safeUrl)
+    .filter(
+      (url): url is string =>
+        url !== null,
+    );
+
+  const socials = [
+    {
+      label: "Instagram",
+      url: settings?.instagram,
+    },
+    {
+      label: "Facebook",
+      url: settings?.facebook,
+    },
+    {
+      label: "TikTok",
+      url: settings?.tiktok,
+    },
+    {
+      label: es
+        ? "Sitio web"
+        : "Website",
+      url: settings?.website,
+    },
+  ].flatMap((item) => {
+    const url = safeUrl(item.url);
+
+    return url
+      ? [{
+          label: item.label,
+          url,
+        }]
+      : [];
+  });
+
+  // ========================================
+  // MANTENER DISPONIBILIDAD ACTUALIZADA
+  // ========================================
+
   useEffect(() => {
     let alive = true;
 
@@ -185,11 +473,18 @@ export function PublicStall({
       try {
         const response = await fetch(
           `/api/stalls/${initial.slug}`,
-          { cache: "no-store" },
+          {
+            cache: "no-store",
+          },
         );
 
-        if (response.ok && alive) {
-          setSnap(await response.json());
+        if (
+          response.ok &&
+          alive
+        ) {
+          setSnap(
+            await response.json(),
+          );
         }
       } catch {
         // Mantener los últimos datos válidos.
@@ -200,7 +495,10 @@ export function PublicStall({
       }
     };
 
-    const id = setInterval(tick, POLL_MS);
+    const id = setInterval(
+      tick,
+      POLL_MS,
+    );
 
     return () => {
       alive = false;
@@ -211,63 +509,212 @@ export function PublicStall({
   useEffect(() => {
     if (!snap.isOpen) return;
 
-    forgetWatch(snap.slug, null);
+    forgetWatch(
+      snap.slug,
+      null,
+    );
 
     for (const dish of snap.dishes) {
       if (dish.portions > 0) {
-        forgetWatch(snap.slug, dish.id);
+        forgetWatch(
+          snap.slug,
+          dish.id,
+        );
       }
     }
   }, [snap]);
 
-  const mins = minutesSince(snap.updatedAt, now);
+  // ========================================
+  // DISPONIBILIDAD ORIGINAL
+  // ========================================
 
-  const available = snap.dishes.filter(
-    (dish) => dish.portions > 0,
+  const mins = minutesSince(
+    snap.updatedAt,
+    now,
   );
 
-  const gone = snap.dishes.filter(
-    (dish) => dish.portions === 0,
-  );
+  const available =
+    snap.dishes.filter(
+      (dish) => dish.portions > 0,
+    );
 
-  const dishes = [...available, ...gone];
+  const gone =
+    snap.dishes.filter(
+      (dish) => dish.portions === 0,
+    );
+
+  const dishes = [
+    ...available,
+    ...gone,
+  ];
+
+  // ========================================
+  // DISEÑO ORIGINAL DE LA PÁGINA
+  // ========================================
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-8 pb-10">
-      {/* ENCABEZADO DEL NEGOCIO */}
+    <div
+      className="public-stall flex w-full min-w-0 flex-col gap-8 pb-10"
+      style={styles}
+    >
+      {/* Personalización limitada al negocio,
+          sin modificar el diseño general. */}
+
+      <style>{`
+        .public-stall {
+          --stall-accent:
+            var(--brand-custom, #a3341f);
+        }
+
+        .public-stall .text-brand {
+          ${
+            primaryColor
+              ? `color: ${primaryColor};`
+              : ""
+          }
+        }
+
+        .public-stall .border-brand {
+          ${
+            primaryColor
+              ? `border-color: ${primaryColor};`
+              : ""
+          }
+        }
+
+        .public-stall .bg-brand {
+          ${
+            buttonColor || primaryColor
+              ? `background-color: ${
+                  buttonColor || primaryColor
+                };`
+              : ""
+          }
+        }
+      `}</style>
+
+      {/* ===================================
+          ENCABEZADO ORIGINAL
+      =================================== */}
+
       <header className="overflow-hidden rounded-[2rem] border border-line bg-surface shadow-sm">
-        <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
+        <div
+          className={
+            settings?.showCover === false
+              ? "grid grid-cols-1"
+              : "grid lg:grid-cols-[1.15fr_0.85fr]"
+          }
+        >
           <div className="flex min-w-0 flex-col justify-center gap-5 px-6 py-8 sm:px-8 sm:py-10 lg:px-10">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              {/* LOGO ORIGINAL O PERSONALIZADO */}
+
               <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-3xl border border-line bg-[#fff9ed] shadow-sm sm:h-36 sm:w-36">
-                <Image
-                  src="/logo-birria-dona-lupe.png"
-                  alt="Logo de Birria Doña Lupe"
-                  fill
-                  sizes="(min-width: 640px) 144px, 128px"
-                  className="object-contain p-1"
-                  priority
-                />
+                {logoUrl ? (
+                  <CustomImage
+                    key={logoUrl}
+                    src={logoUrl}
+                    fallback={logoFallback}
+                    alt={`Logo de ${snap.name}`}
+                    className="h-full w-full object-contain p-1"
+                  />
+                ) : logoFallback ? (
+                  <Image
+                    src={logoFallback}
+                    alt={`Logo de ${snap.name}`}
+                    fill
+                    sizes="(min-width: 640px) 144px, 128px"
+                    className="object-contain p-1"
+                    priority
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-5xl">
+                    🏪
+                  </div>
+                )}
               </div>
 
               <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">
-                  {es
-                    ? "Tradición y sabor casero"
-                    : "Homestyle tradition and flavor"}
-                </p>
+                {tagline && (
+                  <p
+                    className="text-xs font-bold uppercase tracking-[0.18em] text-brand"
+                    style={
+                      primaryColor
+                        ? {
+                            color:
+                              primaryColor,
+                          }
+                        : undefined
+                    }
+                  >
+                    {tagline}
+                  </p>
+                )}
 
-                <h1 className="mt-3 break-words text-3xl font-black leading-tight tracking-tight text-[#2e1b14] sm:text-4xl lg:text-[2.7rem]">
+                <h1
+                  className="mt-3 break-words text-3xl font-black leading-tight tracking-tight text-[#2e1b14] sm:text-4xl lg:text-[2.7rem]"
+                  style={
+                    textColor
+                      ? { color: textColor }
+                      : undefined
+                  }
+                >
                   {snap.name}
                 </h1>
               </div>
             </div>
 
-            <p className="max-w-xl text-sm leading-relaxed text-muted sm:text-base">
-              {es
-                ? "El sabor de la birria tradicional, preparado para ti. Descubre lo que tenemos disponible y aparta tus favoritos antes de que se acaben."
-                : "The taste of traditional birria, prepared for you. Explore what's available and reserve your favorites before they sell out."}
-            </p>
+            {/* DESCRIPCIÓN ORIGINAL */}
+
+            {settings?.showDescription !== false &&
+              description && (
+                <p className="max-w-xl text-sm leading-relaxed text-muted sm:text-base">
+                  {description}
+                </p>
+              )}
+
+            {/* BIENVENIDA PERSONALIZADA */}
+
+            {welcomeMessage && (
+              <p
+                className="max-w-xl text-sm font-semibold leading-relaxed"
+                style={
+                  primaryColor
+                    ? {
+                        color: primaryColor,
+                      }
+                    : undefined
+                }
+              >
+                {welcomeMessage}
+              </p>
+            )}
+
+            {/* UBICACIÓN SI ESTÁ CONFIGURADA */}
+
+            {settings?.showLocation !== false &&
+              location && (
+                <div className="flex items-start gap-2 text-sm text-muted">
+                  <span aria-hidden="true">
+                    📍
+                  </span>
+
+                  {mapsUrl ? (
+                    <a
+                      href={mapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold underline underline-offset-4"
+                    >
+                      {location}
+                    </a>
+                  ) : (
+                    <span>{location}</span>
+                  )}
+                </div>
+              )}
+
+            {/* ESTADO ORIGINAL DEL NEGOCIO */}
 
             <div className="flex flex-wrap items-center gap-3">
               <span
@@ -284,7 +731,10 @@ export function PublicStall({
                       : "bg-bad"
                   }`}
                 />
-                {snap.isOpen ? t.open : t.closed}
+
+                {snap.isOpen
+                  ? t.open
+                  : t.closed}
               </span>
 
               <span className="inline-flex items-center gap-2 rounded-full border border-line bg-background px-4 py-2 text-sm text-muted">
@@ -304,37 +754,60 @@ export function PublicStall({
                     cy="12"
                     r="9"
                   />
+
                   <path d="M12 7v5l3 2" />
                 </svg>
 
                 {mins === 0
                   ? t.updatedNow
-                  : fill(t.updated, { n: mins })}
+                  : fill(t.updated, {
+                      n: mins,
+                    })}
               </span>
             </div>
           </div>
 
-          {/* Imagen principal existente */}
-          <div className="relative min-h-[240px] overflow-hidden bg-[#f4e5d5] sm:min-h-[320px] lg:min-h-[380px]">
-            <Image
-              src="/menu/plato-birria.jpg"
-              alt={
-                es
-                  ? "Plato de birria tradicional"
-                  : "Traditional birria plate"
-              }
-              fill
-              sizes="(min-width: 1024px) 40vw, 100vw"
-              className="object-cover"
-              priority
-            />
+          {/* PORTADA ORIGINAL O PERSONALIZADA */}
 
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-          </div>
+          {settings?.showCover !== false && (
+            <div className="relative min-h-[240px] overflow-hidden bg-[#f4e5d5] sm:min-h-[320px] lg:min-h-[380px]">
+              {coverUrl ? (
+                <CustomImage
+                  key={coverUrl}
+                  src={coverUrl}
+                  fallback={coverFallback}
+                  alt={`Portada de ${snap.name}`}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : coverFallback ? (
+                <Image
+                  src={coverFallback}
+                  alt={
+                    es
+                      ? "Plato de birria tradicional"
+                      : "Traditional birria plate"
+                  }
+                  fill
+                  sizes="(min-width: 1024px) 40vw, 100vw"
+                  className="object-cover"
+                  priority
+                />
+              ) : (
+                <div className="flex min-h-[240px] items-center justify-center text-7xl">
+                  🍽️
+                </div>
+              )}
+
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+            </div>
+          )}
         </div>
       </header>
 
-      {/* CONFIRMACIÓN DE APARTADO */}
+      {/* ===================================
+          CONFIRMACIÓN DE APARTADO ORIGINAL
+      =================================== */}
+
       {confirmation && (
         <div
           role="status"
@@ -344,27 +817,35 @@ export function PublicStall({
               : "border-warn/20 bg-warn-soft text-warn"
           }`}
         >
-          {confirmation.kind === "reserved" ? (
+          {confirmation.kind ===
+          "reserved" ? (
             <div className="space-y-2">
               <p className="text-lg font-extrabold sm:text-xl">
-                {fill(t.public.confirmedTitle, {
-                  name: confirmation.name,
-                })}
+                {fill(
+                  t.public.confirmedTitle,
+                  {
+                    name:
+                      confirmation.name,
+                  },
+                )}
               </p>
 
               <p className="text-sm leading-relaxed">
-                {fill(t.public.confirmedBody, {
-                  time: clock(
-                    confirmation.pickupBy,
-                    timezone,
-                    lang,
-                  ),
-                  total: money(
-                    confirmation.totalCents,
-                    snap.currency,
-                    lang,
-                  ),
-                })}
+                {fill(
+                  t.public.confirmedBody,
+                  {
+                    time: clock(
+                      confirmation.pickupBy,
+                      timezone,
+                      lang,
+                    ),
+                    total: money(
+                      confirmation.totalCents,
+                      snap.currency,
+                      lang,
+                    ),
+                  },
+                )}
               </p>
 
               {stampCard && (
@@ -375,7 +856,8 @@ export function PublicStall({
             </div>
           ) : (
             <p className="font-semibold">
-              {confirmation.kind === "cancelled"
+              {confirmation.kind ===
+              "cancelled"
                 ? t.public.cancelledNote
                 : t.public.errorNote}
             </p>
@@ -383,15 +865,36 @@ export function PublicStall({
         </div>
       )}
 
-      {/* MENÚ PÚBLICO */}
+      {/* ===================================
+          MENÚ PÚBLICO ORIGINAL
+      =================================== */}
+
       <section className="flex min-w-0 flex-col gap-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-brand">
-              {es ? "Menú del día" : "Today's menu"}
+            <p
+              className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-brand"
+              style={
+                primaryColor
+                  ? {
+                      color: primaryColor,
+                    }
+                  : undefined
+              }
+            >
+              {es
+                ? "Menú del día"
+                : "Today's menu"}
             </p>
 
-            <h2 className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl">
+            <h2
+              className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl"
+              style={
+                textColor
+                  ? { color: textColor }
+                  : undefined
+              }
+            >
               {es
                 ? "Lo que todavía hay"
                 : "What's still available"}
@@ -414,6 +917,8 @@ export function PublicStall({
           )}
         </div>
 
+        {/* MENSAJE DE NEGOCIO CERRADO ORIGINAL */}
+
         {!snap.isOpen ? (
           <div className="flex flex-col gap-4 rounded-3xl border border-line bg-surface p-6 shadow-sm sm:p-8">
             <div className="flex size-12 items-center justify-center rounded-2xl bg-bad-soft text-bad">
@@ -428,7 +933,12 @@ export function PublicStall({
                 strokeLinejoin="round"
                 aria-hidden="true"
               >
-                <circle cx="12" cy="12" r="9" />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
+                />
+
                 <path d="M12 7v5l3 2" />
               </svg>
             </div>
@@ -457,38 +967,54 @@ export function PublicStall({
             )}
           </div>
         ) : (
+          // TARJETAS ORIGINALES DE PLATILLOS
           <ul className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             {dishes.map((dish) => {
-              const out = dish.portions === 0;
-              const few = !out && dish.portions <= FEW;
+              const out =
+                dish.portions === 0;
+
+              const few =
+                !out &&
+                dish.portions <= FEW;
 
               const dishName = es
                 ? dish.nameEs
                 : dish.nameEn;
 
-              const fallback = getDemoDishImage(
-                dish.nameEs,
-                dish.nameEn,
-              );
+              const fallback = isDemo
+                ? getDemoDishImage(
+                    dish.nameEs,
+                    dish.nameEn,
+                  )
+                : null;
 
               return (
                 <li
                   key={dish.id}
                   className={`group overflow-hidden rounded-[1.75rem] border border-line bg-surface shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
-                    out ? "opacity-75" : ""
+                    out
+                      ? "opacity-75"
+                      : ""
                   }`}
                 >
                   <div className="flex h-full flex-col sm:flex-row">
-                    {/* Foto real o de demostración */}
+                    {/* FOTO ORIGINAL */}
+
                     <div className="relative h-56 shrink-0 overflow-hidden bg-[#f2e5d8] sm:h-auto sm:w-[42%]">
                       <DishImage
                         key={`${dish.id}-${dish.imageUrl ?? ""}`}
-                        imageUrl={dish.imageUrl}
-                        fallback={fallback}
+                        imageUrl={
+                          dish.imageUrl
+                        }
+                        fallback={
+                          fallback
+                        }
                         alt={dishName}
                         out={out}
                       />
                     </div>
+
+                    {/* INFORMACIÓN ORIGINAL */}
 
                     <div className="flex min-w-0 flex-1 flex-col justify-between gap-5 p-5 sm:p-6">
                       <div>
@@ -505,15 +1031,29 @@ export function PublicStall({
                             ? t.soldOut
                             : few
                               ? t.fewLeft
-                              : fill(t.left, {
-                                  n: dish.portions,
-                                })}
+                              : fill(
+                                  t.left,
+                                  {
+                                    n:
+                                      dish.portions,
+                                  },
+                                )}
                         </span>
 
                         <h3
                           className={`mt-4 break-words text-xl font-extrabold leading-tight text-[#2e1b14] sm:text-2xl ${
-                            out ? "line-through" : ""
+                            out
+                              ? "line-through"
+                              : ""
                           }`}
+                          style={
+                            textColor
+                              ? {
+                                  color:
+                                    textColor,
+                                }
+                              : undefined
+                          }
                         >
                           {dishName}
                         </h3>
@@ -529,13 +1069,27 @@ export function PublicStall({
                         </p>
                       </div>
 
+                      {/* PRECIO ORIGINAL */}
+
                       <div className="flex flex-wrap items-end justify-between gap-3 border-t border-line pt-4">
                         <div>
                           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
-                            {es ? "Precio" : "Price"}
+                            {es
+                              ? "Precio"
+                              : "Price"}
                           </p>
 
-                          <p className="text-2xl font-black tracking-tight text-brand">
+                          <p
+                            className="text-2xl font-black tracking-tight text-brand"
+                            style={
+                              primaryColor
+                                ? {
+                                    color:
+                                      primaryColor,
+                                  }
+                                : undefined
+                            }
+                          >
                             {money(
                               dish.priceCents,
                               snap.currency,
@@ -544,15 +1098,22 @@ export function PublicStall({
                           </p>
                         </div>
 
-                        {out && vapidKey && (
-                          <NotifyButton
-                            slug={snap.slug}
-                            dishId={dish.id}
-                            lang={lang}
-                            vapidKey={vapidKey}
-                            t={t}
-                          />
-                        )}
+                        {out &&
+                          vapidKey && (
+                            <NotifyButton
+                              slug={
+                                snap.slug
+                              }
+                              dishId={
+                                dish.id
+                              }
+                              lang={lang}
+                              vapidKey={
+                                vapidKey
+                              }
+                              t={t}
+                            />
+                          )}
                       </div>
                     </div>
                   </div>
@@ -563,16 +1124,37 @@ export function PublicStall({
         )}
       </section>
 
-      {/* ASISTENTE DE RESERVAS */}
+      {/* ===================================
+          ASISTENTE ORIGINAL DE RESERVAS
+      =================================== */}
+
       <section className="min-w-0 space-y-4">
         <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-brand">
+          <p
+            className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-brand"
+            style={
+              primaryColor
+                ? {
+                    color: primaryColor,
+                  }
+                : undefined
+            }
+          >
             {es
               ? "Estamos para ayudarte"
               : "We're here to help"}
           </p>
 
-          <h2 className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl">
+          <h2
+            className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl"
+            style={
+              textColor
+                ? {
+                    color: textColor,
+                  }
+                : undefined
+            }
+          >
             {es
               ? "Haz tu apartado"
               : "Reserve your order"}
@@ -597,17 +1179,38 @@ export function PublicStall({
         </div>
       </section>
 
-      {/* RECOMPENSAS */}
+      {/* ===================================
+          RECOMPENSAS ORIGINALES
+      =================================== */}
+
       {stampCard && (
         <section className="min-w-0 space-y-4">
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-brand">
+            <p
+              className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-brand"
+              style={
+                primaryColor
+                  ? {
+                      color: primaryColor,
+                    }
+                  : undefined
+              }
+            >
               {es
                 ? "Gracias por tu preferencia"
                 : "Thanks for choosing us"}
             </p>
 
-            <h2 className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl">
+            <h2
+              className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl"
+              style={
+                textColor
+                  ? {
+                      color: textColor,
+                    }
+                  : undefined
+              }
+            >
               {es
                 ? "Tus recompensas"
                 : "Your rewards"}
@@ -622,6 +1225,205 @@ export function PublicStall({
         </section>
       )}
 
+      {/* ===================================
+          INFORMACIÓN EXTRA PERSONALIZABLE
+      =================================== */}
+
+      {(
+        (
+          settings?.showOpeningHours !== false &&
+          Boolean(
+            settings?.openingHours?.length,
+          )
+        ) ||
+        (
+          settings?.showSocialLinks !== false &&
+          (
+            socials.length > 0 ||
+            settings?.phone ||
+            settings?.whatsapp ||
+            settings?.email
+          )
+        )
+      ) && (
+        <section className="grid gap-4 md:grid-cols-2">
+          {/* HORARIOS */}
+
+          {settings?.showOpeningHours !== false &&
+            Boolean(
+              settings?.openingHours?.length,
+            ) && (
+              <div className="rounded-[1.75rem] border border-line bg-surface p-6 shadow-sm">
+                <h2 className="text-xl font-black text-[#2e1b14]">
+                  {es
+                    ? "Horarios de atención"
+                    : "Opening hours"}
+                </h2>
+
+                <ul className="mt-4 space-y-3 text-sm">
+                  {(settings?.openingHours ?? [])
+                    .slice()
+                    .sort(
+                      (a, b) =>
+                        a.day - b.day,
+                    )
+                    .map((hour) => {
+                      const days = es
+                        ? [
+                            "Domingo",
+                            "Lunes",
+                            "Martes",
+                            "Miércoles",
+                            "Jueves",
+                            "Viernes",
+                            "Sábado",
+                          ]
+                        : [
+                            "Sunday",
+                            "Monday",
+                            "Tuesday",
+                            "Wednesday",
+                            "Thursday",
+                            "Friday",
+                            "Saturday",
+                          ];
+
+                      return (
+                        <li
+                          key={hour.day}
+                          className="flex justify-between gap-3"
+                        >
+                          <span className="font-semibold">
+                            {days[hour.day]}
+                          </span>
+
+                          <span className="text-muted">
+                            {hour.enabled
+                              ? `${hour.open} – ${hour.close}`
+                              : es
+                                ? "Cerrado"
+                                : "Closed"}
+                          </span>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            )}
+
+          {/* CONTACTO Y REDES */}
+
+          {settings?.showSocialLinks !== false &&
+            (
+              socials.length > 0 ||
+              settings?.phone ||
+              settings?.whatsapp ||
+              settings?.email
+            ) && (
+              <div className="rounded-[1.75rem] border border-line bg-surface p-6 shadow-sm">
+                <h2 className="text-xl font-black text-[#2e1b14]">
+                  {es
+                    ? "Contacto y redes sociales"
+                    : "Contact and social media"}
+                </h2>
+
+                <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                  {settings?.phone && (
+                    <a
+                      href={`tel:${settings.phone.replace(
+                        /[^+\d]/g,
+                        "",
+                      )}`}
+                      className="font-semibold text-brand underline underline-offset-4"
+                    >
+                      ☎ {settings.phone}
+                    </a>
+                  )}
+
+                  {settings?.whatsapp && (
+                    <a
+                      href={`https://wa.me/${settings.whatsapp.replace(
+                        /\D/g,
+                        "",
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-brand underline underline-offset-4"
+                    >
+                      WhatsApp
+                    </a>
+                  )}
+
+                  {settings?.email && (
+                    <a
+                      href={`mailto:${settings.email}`}
+                      className="font-semibold text-brand underline underline-offset-4"
+                    >
+                      ✉ {settings.email}
+                    </a>
+                  )}
+
+                  {socials.map(
+                    (social) => (
+                      <a
+                        key={
+                          social.label
+                        }
+                        href={
+                          social.url
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-brand underline underline-offset-4"
+                      >
+                        {social.label}
+                      </a>
+                    ),
+                  )}
+                </div>
+              </div>
+            )}
+        </section>
+      )}
+
+      {/* GALERÍA SOLO SI EL DUEÑO AGREGA FOTOS */}
+
+      {settings?.showGallery !== false &&
+        gallery.length > 0 && (
+          <section className="space-y-4">
+            <h2 className="text-3xl font-black tracking-tight text-[#2e1b14]">
+              {es
+                ? "Nuestra galería"
+                : "Our gallery"}
+            </h2>
+
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {gallery.map(
+                (src, index) => (
+                  <div
+                    key={`${src}-${index}`}
+                    className="aspect-square overflow-hidden rounded-[1.75rem] border border-line bg-surface shadow-sm"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt={`${
+                        es
+                          ? "Fotografía"
+                          : "Photo"
+                      } ${index + 1}`}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ),
+              )}
+            </div>
+          </section>
+        )}
+
+      {/* FOOTER ORIGINAL */}
+
       <footer className="border-t border-line pt-6 text-center">
         <p className="text-xs text-muted">
           {t.madeWith}
@@ -630,6 +1432,10 @@ export function PublicStall({
     </div>
   );
 }
+
+// ==========================================
+// TARJETA DE SELLOS ORIGINAL
+// ==========================================
 
 function StampCard({
   slug,
@@ -642,8 +1448,11 @@ function StampCard({
 }) {
   const p = t.public;
 
-  const [phone, setPhone] = useState("");
-  const [bad, setBad] = useState(false);
+  const [phone, setPhone] =
+    useState("");
+
+  const [bad, setBad] =
+    useState(false);
 
   async function lookUp(
     event: FormEvent<HTMLFormElement>,
@@ -655,9 +1464,12 @@ function StampCard({
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type":
+            "application/json",
         },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({
+          phone,
+        }),
       },
     ).catch(() => null);
 
@@ -668,19 +1480,25 @@ function StampCard({
     }
   }
 
-  const have = card.have ?? 0;
-  const ready = have >= card.perReward;
+  const have =
+    card.have ?? 0;
+
+  const ready =
+    have >= card.perReward;
 
   const vars = {
     have,
     n: card.perReward,
-    reward: card.reward.toLowerCase(),
+    reward:
+      card.reward.toLowerCase(),
   };
 
   return (
     <section
       className={`flex flex-col gap-5 rounded-[1.75rem] border border-line p-5 shadow-sm sm:p-7 ${
-        ready ? "bg-warn-soft" : "bg-surface"
+        ready
+          ? "bg-warn-soft"
+          : "bg-surface"
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -695,10 +1513,15 @@ function StampCard({
 
       <ol
         className="grid grid-cols-5 gap-2 sm:grid-cols-10"
-        aria-label={fill(p.stampsCount, vars)}
+        aria-label={fill(
+          p.stampsCount,
+          vars,
+        )}
       >
         {Array.from(
-          { length: card.perReward },
+          {
+            length: card.perReward,
+          },
           (_, index) => (
             <li
               key={index}
@@ -710,7 +1533,8 @@ function StampCard({
             >
               {index < have
                 ? "★"
-                : index === card.perReward - 1
+                : index ===
+                    card.perReward - 1
                   ? "🎁"
                   : ""}
             </li>
@@ -726,9 +1550,15 @@ function StampCard({
         }`}
       >
         {ready
-          ? fill(p.stampsReady, vars)
+          ? fill(
+              p.stampsReady,
+              vars,
+            )
           : card.have === null
-            ? fill(p.stampsHowTo, vars)
+            ? fill(
+                p.stampsHowTo,
+                vars,
+              )
             : `${fill(
                 p.stampsCount,
                 vars,
@@ -761,6 +1591,7 @@ function StampCard({
                     "",
                   ),
                 );
+
                 setBad(false);
               }}
               inputMode="tel"
@@ -772,7 +1603,10 @@ function StampCard({
             <button
               type="submit"
               disabled={
-                phone.replace(/\D/g, "").length < 10
+                phone.replace(
+                  /\D/g,
+                  "",
+                ).length < 10
               }
               className="rounded-2xl bg-brand px-6 py-3 font-bold text-white transition-opacity hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >

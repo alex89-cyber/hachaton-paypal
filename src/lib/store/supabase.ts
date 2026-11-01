@@ -78,6 +78,9 @@ type BusinessRow = {
   stamps_per_reward: number;
   reward_dish_id: string | null;
   updated_at: string;
+
+  // Personalización individual del negocio
+  settings: import("../stall").StallSettings | null;
 };
 
 type ReservationRow = {
@@ -385,6 +388,7 @@ async function load(
   return {
     slug: b.slug,
     name: b.name,
+    settings: b.settings ?? undefined,
     currency: b.currency,
     timezone: b.timezone,
     isOpen: b.is_open,
@@ -643,7 +647,35 @@ export const supabaseStore: StallStore = {
 
     return load(await must(slug));
   },
+    // =========================================
+  // SAVE BUSINESS SETTINGS
+  // =========================================
 
+  async saveSettings(slug, input) {
+    const business = await must(slug);
+
+    const name = input.name.trim();
+
+    if (!name || name.length > 120) {
+      throw new Error("Invalid business name");
+    }
+
+    const updatedAt = new Date().toISOString();
+
+    check(
+      await db()
+        .from("businesses")
+        .update({
+          name,
+          settings: input.settings,
+          updated_at: updatedAt,
+        })
+        .eq("id", business.id),
+      "save business settings",
+    );
+
+    return load(await must(slug));
+  },
   // =========================================
   // DEMO RESET
   // =========================================

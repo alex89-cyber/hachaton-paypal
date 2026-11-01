@@ -172,10 +172,10 @@ export default async function Home({
                 {es ? "Descubrir la plataforma" : "Discover the platform"} ↗
               </a>
               <Link
-                href={businessDemoHref}
+                href={ownerHref}
                 className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-[#DDE2D7] bg-white px-7 py-4 text-sm font-bold text-[#244D38] transition hover:-translate-y-1 hover:border-[#244D38]"
               >
-                {es ? "Probar panel del negocio" : "Try business dashboard"}
+                {es ? "Iniciar sesión" : "Log in"}
               </Link>
             </div>
 

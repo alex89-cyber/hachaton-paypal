@@ -8,198 +8,142 @@ export default async function Home({
   params,
 }: PageProps<"/[lang]">) {
   const { lang } = await params;
-
   if (!hasLocale(lang)) notFound();
 
   const t = await getDictionary(lang);
   const es = lang === "es";
 
-  // Rutas originales. No modificar.
+  // Tres destinos diferentes.
   const demoHref = `/${lang}/birria-dona-lupe`;
   const ownerHref = `/${lang}/login`;
+  const businessDemoHref = `/${lang}/panel/birria-dona-lupe`;
 
   const features = [
     {
-      number: "01",
       icon: "📦",
+      number: "01",
       title: es ? "Inventario inteligente" : "Smart inventory",
       description: es
-        ? "Sabe exactamente qué tienes y cuántos platillos puedes preparar."
-        : "Know exactly what you have and how many dishes you can make.",
+        ? "Conoce tus existencias y cuántos platillos puedes preparar."
+        : "Track your ingredients and know how many dishes you can prepare.",
     },
     {
-      number: "02",
       icon: "🍽️",
+      number: "02",
       title: es ? "Menú en tiempo real" : "Live digital menu",
       description: es
-        ? "Tus clientes siempre saben qué pueden pedir."
-        : "Your customers always know what's available.",
+        ? "Tus clientes siempre saben qué está disponible."
+        : "Customers always know what's available.",
     },
     {
-      number: "03",
       icon: "✨",
-      title: es ? "Más que ventas" : "More than sales",
+      number: "03",
+      title: es ? "Todo conectado" : "Everything connected",
       description: es
-        ? "Apartados, recompensas y movimientos en un solo lugar."
-        : "Reservations, rewards and transactions in one place.",
+        ? "Inventario, ventas, apartados y recompensas en un solo lugar."
+        : "Inventory, sales, reservations and rewards in one place.",
     },
   ];
 
   return (
     <main className="relative min-w-0 flex-1 overflow-hidden bg-[#FAF9F6] text-[#24372C]">
-      {/* ANIMACIONES */}
       <style>{`
         @keyframes th-float {
-          0%, 100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-13px);
-          }
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-13px); }
         }
-
         @keyframes th-float-alt {
-          0%, 100% {
-            transform: translateY(0px) rotate(-6deg);
-          }
-          50% {
-            transform: translateY(10px) rotate(-3deg);
-          }
+          0%, 100% { transform: translateY(0) rotate(-6deg); }
+          50% { transform: translateY(10px) rotate(-3deg); }
         }
-
         @keyframes th-fade-up {
-          from {
-            opacity: 0;
-            transform: translateY(24px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(24px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-
         @keyframes th-pop {
-          0%, 100% {
-            transform: scale(1);
-          }
-          50% {
-            transform: scale(1.055);
-          }
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
         }
-
-        .th-float {
-          animation: th-float 6s ease-in-out infinite;
-        }
-
-        .th-float-alt {
-          animation: th-float-alt 7s ease-in-out infinite;
-        }
-
-        .th-fade-up {
-          animation: th-fade-up 0.85s ease-out both;
-        }
-
-        .th-fade-delay {
-          animation-delay: 0.15s;
-        }
-
-        .th-fade-delay-2 {
-          animation-delay: 0.3s;
-        }
-
-        .th-pop {
-          animation: th-pop 4s ease-in-out infinite;
-        }
+        .th-float { animation: th-float 6s ease-in-out infinite; }
+        .th-float-alt { animation: th-float-alt 7s ease-in-out infinite; }
+        .th-fade-up { animation: th-fade-up .85s ease-out both; }
+        .th-delay-1 { animation-delay: .15s; }
+        .th-delay-2 { animation-delay: .3s; }
+        .th-pop { animation: th-pop 4s ease-in-out infinite; }
 
         @media (prefers-reduced-motion: reduce) {
-          .th-float,
-          .th-float-alt,
-          .th-fade-up,
-          .th-pop {
+          .th-float, .th-float-alt, .th-fade-up, .th-pop {
             animation: none !important;
-          }
-
-          html {
-            scroll-behavior: auto !important;
           }
         }
       `}</style>
 
-      {/* NAVBAR */}
+      {/* NAVEGACIÓN */}
       <header className="relative z-30 border-b border-[#E9EAE3] bg-[#FAF9F6]/95">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8 lg:px-12">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 py-5 sm:px-8 lg:px-12">
           <Link
             href={`/${lang}`}
-            className="group flex items-center gap-3"
+            className="group flex min-w-0 items-center gap-3"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#244D38] text-lg text-white transition-transform duration-300 group-hover:-rotate-12">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#244D38] text-lg text-white transition-transform duration-300 group-hover:-rotate-12">
               ✳
             </span>
-
-            <span className="text-lg font-black tracking-[-0.05em] sm:text-xl">
+            <span className="truncate text-lg font-black tracking-[-0.05em] sm:text-xl">
               ¿Todavía hay<span className="text-[#E68B5C]">?</span>
             </span>
           </Link>
 
-          <nav className="flex items-center gap-3 sm:gap-6">
+          <nav className="flex shrink-0 items-center gap-2 sm:gap-5">
+            <a
+              href="#experiencias"
+              className="hidden text-sm font-semibold text-[#456051] hover:text-[#E68B5C] md:inline"
+            >
+              {es ? "Cómo funciona" : "How it works"}
+            </a>
             <a
               href="#contacto"
-              className="text-xs font-semibold text-[#456051] transition hover:text-[#E68B5C] sm:text-sm"
+              className="hidden text-sm font-semibold text-[#456051] hover:text-[#E68B5C] sm:inline"
             >
               {es ? "Contacto" : "Contact"}
             </a>
-
             <Link
               href={es ? "/en" : "/es"}
-              className="rounded-full border border-[#E4E7DE] px-3 py-2 text-xs font-bold transition hover:bg-white sm:text-sm"
+              className="rounded-full border border-[#E4E7DE] px-3 py-2 text-xs font-bold transition hover:bg-white"
             >
               {es ? "EN" : "ES"}
             </Link>
-
-            {/* TEXTO ACTUALIZADO: INICIAR SESIÓN */}
             <Link
               href={ownerHref}
-              className="hidden text-sm font-semibold text-[#456051] transition hover:text-[#E68B5C] sm:inline"
+              className="rounded-full bg-[#244D38] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#32684C] sm:px-5 sm:text-sm"
             >
               {es ? "Iniciar sesión" : "Business login"}
-            </Link>
-
-            <Link
-              href={demoHref}
-              className="rounded-full bg-[#244D38] px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#32684C] sm:px-5 sm:text-sm"
-            >
-              {es ? "Explorar demo ↗" : "Explore demo ↗"}
             </Link>
           </nav>
         </div>
       </header>
 
-      {/* HERO */}
+      {/* PORTADA */}
       <section className="relative isolate">
         <div className="pointer-events-none absolute -left-32 top-32 h-72 w-72 rounded-full bg-[#E9F0E6] blur-3xl" />
         <div className="pointer-events-none absolute -right-28 bottom-0 h-80 w-80 rounded-full bg-[#F7E9DE] blur-3xl" />
 
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-5 pb-20 pt-20 sm:px-8 sm:pb-28 sm:pt-24 lg:grid-cols-[1.03fr_0.97fr] lg:gap-14 lg:px-12 lg:py-32">
-          {/* TEXTO PRINCIPAL */}
+        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-5 pb-20 pt-20 sm:px-8 sm:py-24 lg:grid-cols-[1.03fr_0.97fr] lg:gap-14 lg:px-12 lg:py-32">
           <div className="relative z-10">
-            <div className="th-fade-up inline-flex items-center gap-2 rounded-full border border-[#DCE7DA] bg-[#EDF5EA] px-4 py-2">
+            <span className="th-fade-up inline-flex items-center gap-2 rounded-full border border-[#DCE7DA] bg-[#EDF5EA] px-4 py-2">
               <span className="h-2 w-2 rounded-full bg-[#60A876]" />
-
-              <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#426A4D]">
+              <span className="text-[11px] font-bold uppercase tracking-[0.13em] text-[#426A4D]">
                 {es
                   ? "El futuro de tu negocio de comida"
                   : "The future of your food business"}
               </span>
-            </div>
+            </span>
 
-            <h1 className="th-fade-up th-fade-delay mt-7 max-w-3xl text-[3.4rem] font-black leading-[1.03] tracking-[-0.07em] sm:text-7xl lg:text-[5.25rem]">
+            <h1 className="th-fade-up th-delay-1 mt-7 max-w-3xl text-[3.4rem] font-black leading-[1.03] tracking-[-0.07em] sm:text-7xl lg:text-[5.25rem]">
               {es ? (
                 <>
                   Lo bueno
                   <br />
-                  <span className="text-[#E68B5C]">
-                    no debería
-                  </span>
+                  <span className="text-[#E68B5C]">no debería</span>
                   <br />
                   acabarse.
                 </>
@@ -207,233 +151,165 @@ export default async function Home({
                 <>
                   Good food
                   <br />
-                  <span className="text-[#E68B5C]">
-                    deserves
-                  </span>
+                  <span className="text-[#E68B5C]">deserves</span>
                   <br />
                   better.
                 </>
               )}
             </h1>
 
-            <p className="th-fade-up th-fade-delay-2 mt-7 max-w-lg text-base leading-8 text-[#708076] sm:text-lg">
+            <p className="th-fade-up th-delay-2 mt-7 max-w-lg text-base leading-8 text-[#708076] sm:text-lg">
               {es
-                ? "Menos desperdicio, más ventas y clientes felices. Organiza tu inventario, muestra tu menú y controla tu negocio desde un solo lugar."
-                : "Less waste, more sales, happier customers. Manage inventory, share your menu and run your business from one place."}
+                ? "Tu negocio bajo control y tus clientes siempre informados. Conecta inventario, ventas, menú digital y apartados en una sola plataforma."
+                : "Keep your business in control and customers informed. Connect inventory, sales, digital menus and reservations in one platform."}
             </p>
 
-            {/* BOTONES PRINCIPALES */}
-            <div className="th-fade-up th-fade-delay-2 mt-9 flex flex-col gap-3 sm:flex-row">
-              {/* DEMO */}
-              <Link
-                href={demoHref}
-                className="group inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-[#244D38] px-7 py-4 text-sm font-bold text-white shadow-[0_12px_28px_rgba(36,77,56,0.15)] transition-all duration-300 hover:-translate-y-1 hover:bg-[#32684C]"
+            <div className="th-fade-up th-delay-2 mt-9 flex flex-col gap-3 sm:flex-row">
+              <a
+                href="#experiencias"
+                className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-[#244D38] px-7 py-4 text-sm font-bold text-white shadow-[0_12px_28px_rgba(36,77,56,.15)] transition hover:-translate-y-1 hover:bg-[#32684C]"
               >
-                {es
-                  ? "Descubrir cómo funciona"
-                  : "See how it works"}
-
-                <span className="transition-transform duration-300 group-hover:translate-x-1">
-                  ↗
-                </span>
-              </Link>
-
-              {/* ACCESO AL PANEL CON PIN */}
+                {es ? "Descubrir la plataforma" : "Discover the platform"} ↗
+              </a>
               <Link
-                href={ownerHref}
-                className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-[#DDE2D7] bg-white px-7 py-4 text-sm font-bold text-[#244D38] transition-all duration-300 hover:-translate-y-1 hover:border-[#244D38]"
+                href={businessDemoHref}
+                className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-[#DDE2D7] bg-white px-7 py-4 text-sm font-bold text-[#244D38] transition hover:-translate-y-1 hover:border-[#244D38]"
               >
-                {es
-                  ? "Iniciar sesión"
-                  : "Business login"}
+                {es ? "Probar panel del negocio" : "Try business dashboard"}
               </Link>
             </div>
 
-            {/* ENLACE AL FORMULARIO */}
             <a
               href="#contacto"
-              className="th-fade-up th-fade-delay-2 mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#607768] underline decoration-[#E68B5C] decoration-2 underline-offset-4 transition hover:text-[#244D38]"
+              className="th-fade-up th-delay-2 mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#607768] underline decoration-[#E68B5C] decoration-2 underline-offset-4 hover:text-[#244D38]"
             >
               {es
                 ? "¿Te interesa la plataforma? Hablemos"
-                : "Interested in the platform? Let's talk"}
-
-              <span aria-hidden="true">↗</span>
+                : "Interested in the platform? Let's talk"} ↗
             </a>
 
-            <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-xs font-semibold text-[#79877B]">
-              <span className="flex items-center gap-2">
-                <span className="text-[#5AA36D]">✓</span>
-                {es ? "Fácil de usar" : "Easy to use"}
-              </span>
-
-              <span className="flex items-center gap-2">
-                <span className="text-[#5AA36D]">✓</span>
-                {es
-                  ? "Información en vivo"
-                  : "Live updates"}
-              </span>
-
-              <span className="flex items-center gap-2">
-                <span className="text-[#5AA36D]">✓</span>
-                {es ? "Hecho para ti" : "Made for you"}
-              </span>
+            <div className="mt-10 flex flex-wrap gap-4 text-xs font-semibold text-[#79877B]">
+              <span>✓ {es ? "Inventario inteligente" : "Smart inventory"}</span>
+              <span>✓ {es ? "Menú en vivo" : "Live menu"}</span>
+              <span>✓ {es ? "Todo conectado" : "Connected operations"}</span>
             </div>
           </div>
 
-          {/* ILUSTRACIÓN DEL PRODUCTO */}
-          <div className="relative mx-auto flex w-full max-w-[560px] items-center justify-center py-8 lg:max-w-none">
-            {/* CÍRCULOS DECORATIVOS */}
+          {/* ILUSTRACIÓN DE AMBAS EXPERIENCIAS */}
+          <div className="relative mx-auto flex w-full max-w-[560px] items-center justify-center py-12">
             <div className="absolute h-[92%] w-[92%] rounded-full bg-[#EAF0E6]" />
-
             <div className="absolute h-[74%] w-[74%] rounded-full border border-[#CFDDCA]" />
-
             <div className="absolute h-[56%] w-[56%] rounded-full border border-dashed border-[#C1D5BE]" />
 
-            {/* COMIDA FLOTANTE */}
-            <div className="th-float absolute -left-2 top-10 z-20 flex h-20 w-20 rotate-[-12deg] items-center justify-center rounded-[1.8rem] border border-white bg-white text-4xl shadow-[0_15px_35px_rgba(31,62,42,0.09)] sm:left-0 sm:h-24 sm:w-24 sm:text-5xl">
+            <div className="th-float absolute left-0 top-5 z-20 rounded-2xl bg-white p-4 text-4xl shadow-xl">
               🥑
             </div>
-
-            <div className="th-float-alt absolute -right-1 top-12 z-20 flex h-20 w-20 items-center justify-center rounded-[1.8rem] border border-white bg-white text-4xl shadow-[0_15px_35px_rgba(31,62,42,0.09)] sm:right-0 sm:h-24 sm:w-24 sm:text-5xl">
+            <div className="th-float-alt absolute right-0 top-10 z-20 rounded-2xl bg-white p-4 text-4xl shadow-xl">
               🍋
             </div>
 
-            <div
-              className="th-float absolute -bottom-1 left-3 z-20 flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[#FCE7DA] text-3xl shadow-lg sm:bottom-5 sm:left-5 sm:h-20 sm:w-20 sm:text-4xl"
-              style={{ animationDelay: "1.4s" }}
-            >
-              🌶️
-            </div>
-
-            {/* TARJETA PRINCIPAL */}
-            <div className="relative z-10 my-12 w-[78%] max-w-[365px] rotate-[-3deg] rounded-[2.25rem] border border-white bg-white p-4 shadow-[0_35px_75px_rgba(27,60,38,0.13)] transition-transform duration-500 hover:rotate-0 sm:p-5">
-              <div className="flex items-center justify-between gap-3 border-b border-[#EDF0EA] pb-4">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#93A095]">
-                    {es
-                      ? "MENÚ DIGITAL"
-                      : "DIGITAL MENU"}
-                  </p>
-
-                  <p className="mt-1 text-base font-black text-[#244D38] sm:text-lg">
-                    ¿Todavía hay?
-                  </p>
-                </div>
-
-                <span className="flex items-center gap-1.5 rounded-full bg-[#E9F5EA] px-2.5 py-1.5 text-[10px] font-bold text-[#438D53]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#58AD6B]" />
-                  LIVE
-                </span>
-              </div>
-
-              <div className="mt-5 overflow-hidden rounded-[1.5rem] bg-[#F5E9DA]">
-                <div className="relative flex aspect-[1.35/1] items-center justify-center overflow-hidden bg-gradient-to-br from-[#F7EAD7] via-[#EBD6B7] to-[#D9BFA4]">
-                  <div className="absolute h-[75%] w-[75%] rounded-full bg-[#FBF7EF] shadow-[0_15px_30px_rgba(81,56,28,0.15)]" />
-
-                  <div className="absolute h-[62%] w-[62%] rounded-full border-2 border-[#E7DBCA]" />
-
-                  <div className="th-pop relative z-10 text-7xl drop-shadow-lg sm:text-8xl">
-                    🥗
+            <div className="relative z-10 my-10 flex w-[87%] max-w-[440px] flex-col gap-3">
+              <div className="-rotate-3 rounded-[2rem] border border-white bg-white p-5 shadow-[0_25px_55px_rgba(31,62,42,.12)] transition-transform duration-500 hover:rotate-0 sm:p-6">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-xl bg-[#EAF3E8] p-3 text-2xl">
+                      👩‍🍳
+                    </span>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-[#95A095]">
+                        {es ? "PANEL DEL NEGOCIO" : "BUSINESS DASHBOARD"}
+                      </p>
+                      <p className="mt-1 text-sm font-black">
+                        {es ? "Todo bajo control" : "Everything in control"}
+                      </p>
+                    </div>
                   </div>
-
-                  <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-3 py-1.5 text-[10px] font-bold text-[#47734F]">
-                    {es
-                      ? "Recién preparado"
-                      : "Freshly prepared"}
+                  <span className="rounded-full bg-[#E9F5EA] px-2 py-1 text-[10px] font-bold text-[#438D53]">
+                    ● LIVE
                   </span>
                 </div>
+
+                <div className="mt-5 grid grid-cols-3 gap-2">
+                  {[
+                    ["📦", es ? "Stock" : "Stock", "78%"],
+                    ["📊", es ? "Ventas" : "Sales", "↗"],
+                    ["🍽️", es ? "Menú" : "Menu", "✓"],
+                  ].map(([icon, title, value]) => (
+                    <div
+                      key={title}
+                      className="rounded-xl bg-[#F4F7F2] p-3 text-center"
+                    >
+                      <div className="text-xl">{icon}</div>
+                      <p className="mt-2 text-[10px] text-[#879889]">
+                        {title}
+                      </p>
+                      <p className="mt-1 font-black">{value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="mt-5 flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-[11px] font-semibold text-[#849086]">
-                    {es
-                      ? "Tu menú, actualizado"
-                      : "Your menu, updated"}
-                  </p>
-
-                  <h3 className="mt-1 text-base font-black text-[#244D38] sm:text-lg">
-                    {es
-                      ? "Siempre al día"
-                      : "Always up to date"}
-                  </h3>
-                </div>
-
-                <span className="rounded-xl bg-[#E9F3E9] px-3 py-2 text-xs font-extrabold text-[#438D53]">
-                  ✓
+              <div className="flex justify-center">
+                <span className="th-pop rounded-full bg-[#244D38] px-4 py-2 text-xl text-white shadow-lg">
+                  ↕
                 </span>
               </div>
 
-              <div className="mt-5 flex items-center gap-2">
-                <span className="h-2 flex-1 rounded-full bg-[#E9EEE8]" />
-                <span className="h-2 w-12 rounded-full bg-[#E68B5C]" />
-                <span className="h-2 w-8 rounded-full bg-[#E9EEE8]" />
+              <div className="rotate-3 rounded-[2rem] border border-white bg-white p-5 shadow-[0_25px_55px_rgba(31,62,42,.12)] transition-transform duration-500 hover:rotate-0 sm:p-6">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-[#95A095]">
+                      {es ? "VISTA DEL CLIENTE" : "CUSTOMER VIEW"}
+                    </p>
+                    <p className="mt-1 text-sm font-black">
+                      {es ? "Siempre informado" : "Always informed"}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#E9F5EA] px-3 py-1 text-[10px] font-bold text-[#438D53]">
+                    {es ? "Disponible" : "Available"}
+                  </span>
+                </div>
+                <div className="mt-5 flex items-center gap-4 rounded-xl bg-[#F8F3E9] p-3">
+                  <span className="rounded-xl bg-[#F5E2CB] p-3 text-4xl">
+                    🥗
+                  </span>
+                  <div>
+                    <p className="text-sm font-black">
+                      {es ? "Menú actualizado" : "Updated menu"}
+                    </p>
+                    <p className="mt-1 text-xs text-[#829187]">
+                      {es
+                        ? "Consulta y aparta favoritos"
+                        : "Browse and reserve favorites"}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* NOTIFICACIÓN FLOTANTE */}
-            <div className="th-float absolute -right-2 bottom-12 z-20 rounded-2xl border border-white bg-white px-4 py-3 shadow-[0_14px_40px_rgba(31,62,42,0.12)] sm:-right-5 sm:bottom-20 sm:px-5 sm:py-4">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E9F5EA] text-lg">
-                  📈
-                </span>
-
-                <div>
-                  <p className="text-[10px] font-medium text-[#95A095]">
-                    {es
-                      ? "Todo conectado"
-                      : "Everything connected"}
-                  </p>
-
-                  <p className="mt-1 text-xs font-black text-[#244D38] sm:text-sm">
-                    {es
-                      ? "Tu negocio en vivo"
-                      : "Your business, live"}
-                  </p>
-                </div>
-              </div>
+            <div className="th-float absolute bottom-0 right-1 z-20 rounded-2xl bg-[#FCEBDF] px-4 py-3 text-sm font-bold text-[#B97953] shadow-xl">
+              {es ? "Sincronizados ✨" : "In sync ✨"}
             </div>
           </div>
         </div>
-
-        {/* INDICADOR DE SCROLL */}
-        <div className="relative hidden justify-center pb-8 lg:flex">
-          <span className="flex flex-col items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#A0AAA0]">
-            {es
-              ? "Descubre más"
-              : "Discover more"}
-
-            <span className="th-float text-xl">↓</span>
-          </span>
-        </div>
       </section>
 
-      {/* FRANJA DE BENEFICIOS */}
+      {/* FRANJA */}
       <section className="border-y border-[#E6ECE3] bg-[#F0F4ED]">
-        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-5 px-5 py-7 text-center sm:grid-cols-3 sm:px-8 lg:px-12">
+        <div className="mx-auto grid max-w-7xl gap-5 px-5 py-7 text-center sm:grid-cols-3 sm:px-8 lg:px-12">
           {[
-            es
-              ? "Menos desperdicio"
-              : "Less food waste",
+            es ? "Menos desperdicio" : "Less food waste",
             es ? "Más control" : "More control",
-            es
-              ? "Mejores experiencias"
-              : "Better experiences",
-          ].map((item, i) => (
+            es ? "Mejores experiencias" : "Better experiences",
+          ].map((text, index) => (
             <div
-              key={item}
+              key={text}
               className="flex items-center justify-center gap-3 text-sm font-bold text-[#43664C]"
             >
               <span className="text-lg text-[#E68B5C]">
-                {i === 0
-                  ? "✳"
-                  : i === 1
-                    ? "✦"
-                    : "♡"}
+                {index === 0 ? "✳" : index === 1 ? "✦" : "♡"}
               </span>
-
-              {item}
+              {text}
             </div>
           ))}
         </div>
@@ -443,45 +319,36 @@ export default async function Home({
       <section className="bg-white px-5 py-20 sm:px-8 lg:px-12 lg:py-28">
         <div className="mx-auto max-w-7xl">
           <div className="mx-auto max-w-3xl text-center">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#E68B5C]">
-              {es
-                ? "Simple, pero poderoso"
-                : "Simple, yet powerful"}
+            <p className="text-xs font-black uppercase tracking-[.2em] text-[#E68B5C]">
+              {es ? "Simple, pero poderoso" : "Simple, yet powerful"}
             </p>
-
-            <h2 className="mt-5 text-4xl font-black leading-tight tracking-[-0.05em] text-[#244D38] sm:text-5xl">
+            <h2 className="mt-5 text-4xl font-black leading-tight tracking-[-.05em] text-[#244D38] sm:text-5xl">
               {es
                 ? "Todo lo que necesitas, nada que te complique."
                 : "Everything you need. Nothing you don't."}
             </h2>
-
             <p className="mx-auto mt-5 max-w-xl text-base leading-8 text-[#7D8A80]">
               {es
-                ? "Pensado para la vida real de los negocios de comida: rápida, cambiante y llena de movimiento."
-                : "Designed for the real world of food businesses: fast-paced, ever-changing and always moving."}
+                ? "Pensado para conectar la operación diaria del negocio con la experiencia de sus clientes."
+                : "Built to connect your daily business operations with the customer experience."}
             </p>
           </div>
 
-          <div className="mt-14 grid grid-cols-1 gap-5 md:grid-cols-3">
+          <div className="mt-14 grid gap-5 md:grid-cols-3">
             {features.map((feature) => (
               <article
                 key={feature.number}
-                className="group flex min-h-[290px] flex-col rounded-[2rem] border border-[#E9EEE7] bg-[#FBFCFA] p-7 transition-all duration-500 hover:-translate-y-2 hover:border-[#C7DDC7] hover:bg-[#F2F8F0] hover:shadow-[0_20px_45px_rgba(31,62,42,0.07)]"
+                className="group flex min-h-[270px] flex-col rounded-[2rem] border border-[#E9EEE7] bg-[#FBFCFA] p-7 transition-all duration-500 hover:-translate-y-2 hover:border-[#C7DDC7] hover:bg-[#F2F8F0] hover:shadow-xl"
               >
-                <div className="flex items-start justify-between">
-                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EDF3EA] text-3xl transition-transform duration-500 group-hover:-rotate-12 group-hover:scale-110">
+                <div className="flex items-center justify-between">
+                  <span className="rounded-2xl bg-[#EDF3EA] p-3 text-3xl transition-transform group-hover:-rotate-12">
                     {feature.icon}
                   </span>
-
                   <span className="text-xs font-black text-[#BAC7BC]">
                     {feature.number}
                   </span>
                 </div>
-
-                <h3 className="mt-10 text-xl font-black tracking-tight text-[#244D38]">
-                  {feature.title}
-                </h3>
-
+                <h3 className="mt-9 text-xl font-black">{feature.title}</h3>
                 <p className="mt-3 text-sm leading-7 text-[#7D8A80]">
                   {feature.description}
                 </p>
@@ -491,89 +358,345 @@ export default async function Home({
         </div>
       </section>
 
-      {/* SECCIÓN DE INVENTARIO */}
-      <section className="bg-[#F4F6F1] px-5 py-20 sm:px-8 lg:px-12 lg:py-28">
+      {/* DOS EXPERIENCIAS, SIMÉTRICAS */}
+      <section
+        id="experiencias"
+        className="scroll-mt-20 bg-[#F4F6F1] px-5 py-20 sm:px-8 lg:px-12 lg:py-28"
+      >
+        <div className="mx-auto max-w-7xl">
+          <div className="mx-auto max-w-3xl text-center">
+            <span className="rounded-full bg-[#E8F0E3] px-4 py-2 text-[11px] font-black uppercase tracking-wider text-[#54815B]">
+              {es
+                ? "Dos experiencias. Un solo sistema."
+                : "Two experiences. One system."}
+            </span>
+            <h2 className="mt-7 text-4xl font-black leading-tight tracking-[-.05em] sm:text-5xl">
+              {es ? (
+                <>
+                  Tu negocio bajo control.
+                  <br />
+                  <span className="text-[#E68B5C]">
+                    Tus clientes informados.
+                  </span>
+                </>
+              ) : (
+                <>
+                  Your business in control.
+                  <br />
+                  <span className="text-[#E68B5C]">
+                    Your customers in the know.
+                  </span>
+                </>
+              )}
+            </h2>
+            <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-[#78877C]">
+              {es
+                ? "Explora ambas experiencias sin PIN. Las demostraciones no modifican los datos administrativos reales."
+                : "Explore both experiences without a PIN. The demos don't change real business data."}
+            </p>
+          </div>
+
+          <div className="mt-14 grid items-stretch gap-6 lg:grid-cols-2">
+            {/* TARJETA DEL NEGOCIO */}
+            <article className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-[#DDE7DB] bg-white shadow-sm transition hover:-translate-y-2 hover:shadow-xl">
+              <div className="relative flex h-[350px] items-center justify-center overflow-hidden bg-[#E6EEE3] p-7 sm:p-9">
+                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full border-[35px] border-white/40" />
+
+                <div className="relative mx-auto flex h-[280px] w-full max-w-sm rotate-[-3deg] flex-col justify-center rounded-[1.6rem] border border-white bg-white p-5 shadow-[0_18px_40px_rgba(31,62,42,.12)] transition-transform duration-500 group-hover:rotate-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-black">
+                      {es ? "Inventario" : "Inventory"}
+                    </p>
+                    <span className="rounded-full bg-[#E9F5EA] px-3 py-1 text-[10px] font-bold text-[#438D53]">
+                      ● LIVE
+                    </span>
+                  </div>
+
+                  {[
+                    {
+                      emoji: "🍅",
+                      label: es ? "Ingredientes" : "Ingredients",
+                      width: "78%",
+                      color: "#69AA78",
+                    },
+                    {
+                      emoji: "🧀",
+                      label: es ? "Existencias" : "Stock levels",
+                      width: "55%",
+                      color: "#E6A36C",
+                    },
+                    {
+                      emoji: "🥬",
+                      label: es ? "Disponibilidad" : "Availability",
+                      width: "90%",
+                      color: "#69AA78",
+                    },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="mt-5 flex items-center gap-3"
+                    >
+                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#F4F7F2] text-2xl">
+                        {item.emoji}
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold">{item.label}</p>
+                        <div className="mt-2 h-2 rounded-full bg-[#E8EFE8]">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: item.width,
+                              backgroundColor: item.color,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-1 flex-col p-7 sm:p-9">
+                <span className="text-xs font-black uppercase tracking-[.15em] text-[#79A184]">
+                  {es ? "PARA QUIEN ADMINISTRA" : "FOR BUSINESS OWNERS"}
+                </span>
+                <h3 className="mt-3 text-3xl font-black tracking-tight">
+                  {es ? "Vista del negocio" : "Business dashboard"}
+                </h3>
+                <p className="mt-4 text-sm leading-7 text-[#78877C]">
+                  {es
+                    ? "Administra inventario, recetas, ventas, apartados y cortes de caja desde un solo panel."
+                    : "Manage inventory, recipes, sales, reservations and cash-up from one dashboard."}
+                </p>
+                <div className="mt-6 flex flex-wrap gap-2">
+                  {(es
+                    ? ["Inventario", "Ventas", "Recetas", "Apartados"]
+                    : ["Inventory", "Sales", "Recipes", "Reservations"]
+                  ).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-[#F0F5EE] px-3 py-2 text-xs font-semibold text-[#597361]"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-auto pt-9">
+                  <Link
+                    href={businessDemoHref}
+                    className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl bg-[#244D38] px-6 py-4 text-sm font-black text-white transition hover:bg-[#32684C]"
+                  >
+                    {es
+                      ? "Explorar panel del negocio"
+                      : "Explore business dashboard"} ↗
+                  </Link>
+                  <p className="mt-3 text-center text-xs text-[#93A096]">
+                    {es
+                      ? "Demostración interactiva, sin PIN"
+                      : "Interactive demo, no PIN required"}
+                  </p>
+                </div>
+              </div>
+            </article>
+
+            {/* TARJETA DEL CLIENTE */}
+            <article className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-[#EFE2D5] bg-white shadow-sm transition hover:-translate-y-2 hover:shadow-xl">
+              <div className="relative flex h-[350px] items-center justify-center overflow-hidden bg-[#F8E9DB] p-7 sm:p-9">
+                <div className="pointer-events-none absolute -left-16 -top-16 h-56 w-56 rounded-full border-[35px] border-white/40" />
+
+                <div className="relative mx-auto flex h-[280px] w-full max-w-sm rotate-[3deg] flex-col justify-center rounded-[1.6rem] border border-white bg-white p-5 shadow-[0_18px_40px_rgba(103,60,36,.12)] transition-transform duration-500 group-hover:rotate-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-black">
+                      {es ? "Menú digital" : "Digital menu"}
+                    </p>
+                    <span className="rounded-full bg-[#E9F5EA] px-3 py-1 text-[10px] font-bold text-[#438D53]">
+                      ● LIVE
+                    </span>
+                  </div>
+
+                  <div className="mt-5 flex items-center gap-4 rounded-2xl bg-[#FAF5EC] p-3">
+                    <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[#F4E2CB] text-4xl">
+                      🥗
+                    </span>
+                    <div>
+                      <p className="text-sm font-black">
+                        {es ? "Platillo disponible" : "Dish available"}
+                      </p>
+                      <p className="mt-1 text-xs text-[#7D8A80]">
+                        {es ? "Menú actualizado" : "Updated menu"}
+                      </p>
+                      <span className="mt-2 inline-block rounded-full bg-[#E9F5EA] px-2 py-1 text-[10px] font-bold text-[#438D53]">
+                        ✓ {es ? "Hay" : "Available"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-4 rounded-2xl bg-[#FAF5EC] p-3">
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[#F4E2CB] text-3xl">
+                      🥪
+                    </span>
+                    <div>
+                      <p className="text-sm font-black">
+                        {es ? "Consulta tu menú" : "Browse the menu"}
+                      </p>
+                      <p className="mt-1 text-xs text-[#7D8A80]">
+                        {es ? "Descubre y aparta" : "Discover and reserve"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-1 flex-col p-7 sm:p-9">
+                <span className="text-xs font-black uppercase tracking-[.15em] text-[#D59772]">
+                  {es ? "PARA QUIEN COMPRA" : "FOR CUSTOMERS"}
+                </span>
+                <h3 className="mt-3 text-3xl font-black tracking-tight">
+                  {es ? "Vista del cliente" : "Customer experience"}
+                </h3>
+                <p className="mt-4 text-sm leading-7 text-[#78877C]">
+                  {es
+                    ? "Consulta platillos disponibles, realiza apartados y recibe actualizaciones sin tener que preguntar."
+                    : "Browse available dishes, make reservations and stay informed without having to ask."}
+                </p>
+                <div className="mt-6 flex flex-wrap gap-2">
+                  {(es
+                    ? ["Menú", "Disponibilidad", "Apartados", "Notificaciones"]
+                    : ["Menu", "Availability", "Reservations", "Notifications"]
+                  ).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-[#FCF2E8] px-3 py-2 text-xs font-semibold text-[#B78261]"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-auto pt-9">
+                  <Link
+                    href={demoHref}
+                    className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl border border-[#D4DCCF] bg-[#FAFBF8] px-6 py-4 text-sm font-black text-[#244D38] transition hover:border-[#244D38] hover:bg-[#EDF4E9]"
+                  >
+                    {es
+                      ? "Ver experiencia del cliente"
+                      : "Explore customer experience"} ↗
+                  </Link>
+                  <p className="mt-3 text-center text-xs text-[#93A096]">
+                    {es
+                      ? "Demo pública de Birria Doña Lupe"
+                      : "Birria Doña Lupe public demo"}
+                  </p>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          {/* EXPLICACIÓN DE CONEXIÓN */}
+          <div className="mt-12 rounded-[2rem] border border-[#DDE7DB] bg-white p-6 sm:p-9">
+            <div className="text-center">
+              <p className="text-xs font-black uppercase tracking-wider text-[#6B9D78]">
+                {es ? "Así trabajan juntas" : "How they work together"}
+              </p>
+              <h3 className="mt-3 text-2xl font-black sm:text-3xl">
+                {es
+                  ? "Una acción. Todo actualizado."
+                  : "One action. Everything updated."}
+              </h3>
+            </div>
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
+              {[
+                {
+                  icon: "📦",
+                  title: es ? "El negocio registra" : "The business updates",
+                  text: es
+                    ? "Actualiza ingredientes, existencias y ventas."
+                    : "Updates ingredients, stock and sales.",
+                },
+                {
+                  icon: "↔",
+                  title: es ? "El sistema calcula" : "The system calculates",
+                  text: es
+                    ? "Recalcula cuántas porciones se pueden preparar."
+                    : "Recalculates how many portions can be prepared.",
+                },
+                {
+                  icon: "📱",
+                  title: es ? "El cliente lo ve" : "The customer sees it",
+                  text: es
+                    ? "Consulta el menú con disponibilidad actualizada."
+                    : "Browses the menu with updated availability.",
+                },
+              ].map((step, index) => (
+                <div
+                  key={step.title}
+                  className="rounded-2xl bg-[#F7F9F5] p-5"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="rounded-xl bg-[#E8F0E3] p-3 text-2xl">
+                      {step.icon}
+                    </span>
+                    <span className="text-xs font-black text-[#A8B8A9]">
+                      0{index + 1}
+                    </span>
+                  </div>
+                  <h4 className="mt-5 font-black">{step.title}</h4>
+                  <p className="mt-2 text-sm leading-6 text-[#78877C]">
+                    {step.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* INVENTARIO */}
+      <section className="bg-[#FAF9F6] px-5 py-20 sm:px-8 lg:px-12 lg:py-28">
         <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2">
           <div className="relative order-2 flex min-h-[350px] items-center justify-center lg:order-1">
             <div className="absolute h-80 w-80 rounded-full bg-[#E3EDE1] sm:h-[390px] sm:w-[390px]" />
-
-            <div className="th-float relative z-10 w-[76%] max-w-[350px] rotate-[-5deg] rounded-[2rem] border border-white bg-white p-6 shadow-[0_25px_55px_rgba(31,62,42,0.12)]">
+            <div className="th-float relative z-10 w-[76%] max-w-[350px] rotate-[-5deg] rounded-[2rem] border border-white bg-white p-6 shadow-[0_25px_55px_rgba(31,62,42,.12)]">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-black text-[#244D38]">
+                <span className="text-sm font-black">
                   {es ? "Inventario" : "Inventory"}
                 </span>
-
                 <span className="rounded-full bg-[#E9F5EA] px-3 py-1 text-[10px] font-bold text-[#438D53]">
                   ● LIVE
                 </span>
               </div>
-
-              <div className="mt-7 flex items-center gap-4">
-                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF3E8] text-3xl">
-                  🍅
-                </span>
-
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-[#244D38]">
-                    {es ? "Ingredientes" : "Ingredients"}
-                  </p>
-
-                  <div className="mt-2 h-2 rounded-full bg-[#E8EFE8]">
-                    <div className="h-full w-[78%] rounded-full bg-[#69AA78]" />
+              {[
+                ["🍅", es ? "Ingredientes" : "Ingredients", "78%", "#69AA78"],
+                ["🧀", es ? "Existencias" : "Stock levels", "55%", "#E6A36C"],
+                ["🥬", es ? "Disponibilidad" : "Availability", "90%", "#69AA78"],
+              ].map(([icon, label, width, color]) => (
+                <div key={label} className="mt-5 flex items-center gap-4">
+                  <span className="rounded-2xl bg-[#FFF3E8] p-3 text-3xl">
+                    {icon}
+                  </span>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold">{label}</p>
+                    <div className="mt-2 h-2 rounded-full bg-[#E8EFE8]">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width, backgroundColor: color }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="mt-5 flex items-center gap-4">
-                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F1F0E4] text-3xl">
-                  🧀
-                </span>
-
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-[#244D38]">
-                    {es ? "Existencias" : "Stock levels"}
-                  </p>
-
-                  <div className="mt-2 h-2 rounded-full bg-[#E8EFE8]">
-                    <div className="h-full w-[55%] rounded-full bg-[#E6A36C]" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-5 flex items-center gap-4">
-                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EDF5EA] text-3xl">
-                  🥬
-                </span>
-
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-[#244D38]">
-                    {es
-                      ? "Disponibilidad"
-                      : "Availability"}
-                  </p>
-
-                  <div className="mt-2 h-2 rounded-full bg-[#E8EFE8]">
-                    <div className="h-full w-[90%] rounded-full bg-[#69AA78]" />
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
-
-            {/* ZANAHORIA FLOTANTE */}
-            <div className="th-float-alt absolute bottom-0 right-0 z-20 rounded-2xl border border-white bg-[#FCE9D8] px-5 py-4 text-3xl shadow-xl sm:right-7">
+            <span className="th-float-alt absolute bottom-0 right-0 z-20 rounded-2xl bg-[#FCE9D8] p-4 text-4xl shadow-xl">
               🥕
-            </div>
+            </span>
           </div>
 
-          {/* TEXTO */}
           <div className="order-1 lg:order-2">
-            <span className="inline-flex rounded-full bg-[#E8F0E3] px-4 py-2 text-[11px] font-black uppercase tracking-[0.17em] text-[#54815B]">
-              {es
-                ? "Más fácil, todos los días"
-                : "Easier, every day"}
+            <span className="rounded-full bg-[#E8F0E3] px-4 py-2 text-[11px] font-black uppercase tracking-wider text-[#54815B]">
+              {es ? "Más fácil, todos los días" : "Easier, every day"}
             </span>
-
-            <h2 className="mt-6 max-w-xl text-4xl font-black leading-[1.1] tracking-[-0.055em] text-[#244D38] sm:text-5xl">
+            <h2 className="mt-6 text-4xl font-black leading-tight tracking-[-.055em] sm:text-5xl">
               {es ? (
                 <>
                   Tú haces la comida.
@@ -592,88 +715,80 @@ export default async function Home({
                 </>
               )}
             </h2>
-
             <p className="mt-6 max-w-lg text-base leading-8 text-[#78877C]">
               {es
                 ? "Olvídate de calcular a mano cuántas porciones quedan. Registra tus ingredientes y deja que la plataforma te ayude a mantener todo organizado."
-                : "Forget manually counting how many portions are left. Add your ingredients and let the platform help keep everything organized."}
+                : "Forget counting remaining portions by hand. Track ingredients and let the platform help you stay organized."}
             </p>
-
-            <Link
-              href={demoHref}
-              className="group mt-8 inline-flex items-center gap-2 text-sm font-black text-[#244D38] underline decoration-[#E68B5C] decoration-2 underline-offset-8 transition hover:text-[#E68B5C]"
-            >
-              {es
-                ? "Mira cómo funciona"
-                : "See it in action"}
-
-              <span className="transition-transform group-hover:translate-x-1">
-                ↗
-              </span>
-            </Link>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href={businessDemoHref}
+                className="rounded-2xl bg-[#244D38] px-6 py-4 text-sm font-black text-white hover:bg-[#32684C]"
+              >
+                {es ? "Explorar panel del negocio" : "Explore business dashboard"} ↗
+              </Link>
+              <Link
+                href={demoHref}
+                className="rounded-2xl border border-[#D4DCCF] bg-white px-6 py-4 text-sm font-black hover:border-[#244D38]"
+              >
+                {es ? "Ver menú del cliente" : "View customer menu"} ↗
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* CTA FINAL */}
+      {/* LLAMADO A LA ACCIÓN */}
       <section className="bg-white px-5 py-20 sm:px-8 lg:px-12 lg:py-28">
         <div className="relative mx-auto max-w-7xl overflow-hidden rounded-[2.5rem] bg-[#244D38] px-6 py-16 text-center text-white sm:px-12 sm:py-24">
           <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full border-[35px] border-white/10" />
-
           <div className="pointer-events-none absolute -bottom-32 -right-20 h-80 w-80 rounded-full border-[45px] border-white/10" />
-
-          <span className="relative inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.15em]">
+          <span className="relative rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-wider">
             ¿Todavía hay?
           </span>
-
-          <h2 className="relative mx-auto mt-7 max-w-3xl text-4xl font-black leading-[1.08] tracking-[-0.055em] sm:text-6xl">
+          <h2 className="relative mx-auto mt-7 max-w-3xl text-4xl font-black leading-tight tracking-[-.055em] sm:text-6xl">
             {es
               ? "Que no se te escape ninguna oportunidad."
               : "Make every opportunity count."}
           </h2>
-
           <p className="relative mx-auto mt-6 max-w-xl text-base leading-8 text-[#D5E5D6]">
             {es
               ? "Conoce una manera más sencilla de conectar tu cocina, tu inventario y tus clientes."
               : "Discover an easier way to connect your kitchen, inventory and customers."}
           </p>
-
           <div className="relative mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              href={demoHref}
-              className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-white px-8 py-4 text-sm font-black text-[#244D38] transition-all duration-300 hover:-translate-y-1 hover:bg-[#F7ECDD]"
+              href={businessDemoHref}
+              className="rounded-2xl bg-white px-8 py-4 text-sm font-black text-[#244D38] transition hover:-translate-y-1"
             >
-              {es
-                ? "Explorar la demostración"
-                : "Explore the demo"}
-
-              <span>↗</span>
+              {es ? "Probar panel del negocio" : "Try business dashboard"} ↗
             </Link>
-
+            <Link
+              href={demoHref}
+              className="rounded-2xl border border-white/35 bg-white/10 px-8 py-4 text-sm font-black text-white transition hover:-translate-y-1"
+            >
+              {es ? "Ver demo del cliente" : "View customer demo"} ↗
+            </Link>
             <a
               href="#contacto"
-              className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl border border-white/35 bg-white/10 px-8 py-4 text-sm font-black text-white transition-all duration-300 hover:-translate-y-1 hover:bg-white/20"
+              className="rounded-2xl border border-white/35 bg-white/10 px-8 py-4 text-sm font-black text-white transition hover:-translate-y-1"
             >
-              {es ? "Contáctanos" : "Contact us"}
-
-              <span>↗</span>
+              {es ? "Contáctanos" : "Contact us"} ↗
             </a>
           </div>
         </div>
       </section>
 
-      {/* CONTACTO DE FERNANDA Y ALEJANDRO */}
-      {/* Mantiene el formulario y los enlaces directos */}
+      {/* CONTACTOS Y FORMULARIO EXISTENTES */}
       <ContactSection lang={lang} />
 
       {/* FOOTER */}
       <footer className="border-t border-[#E7EBE4] bg-[#FAF9F6]">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-9 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
           <div>
-            <p className="text-lg font-black tracking-tight text-[#244D38]">
+            <p className="text-lg font-black">
               ¿Todavía hay<span className="text-[#E68B5C]">?</span>
             </p>
-
             <p className="mt-1 text-xs text-[#8D9A8D]">
               {es
                 ? "Hecho para quienes alimentan al mundo."
@@ -682,31 +797,21 @@ export default async function Home({
           </div>
 
           <div className="flex flex-wrap items-center gap-5 text-sm font-semibold text-[#66806D]">
-            <Link
-              href={demoHref}
-              className="transition hover:text-[#244D38]"
-            >
+            <Link href={businessDemoHref} className="hover:text-[#244D38]">
+              {es ? "Demo negocio" : "Business demo"}
+            </Link>
+            <Link href={demoHref} className="hover:text-[#244D38]">
               {t.demoLink}
             </Link>
-
-            {/* TEXTO ACTUALIZADO EN EL FOOTER */}
-            <Link
-              href={ownerHref}
-              className="transition hover:text-[#244D38]"
-            >
+            <Link href={ownerHref} className="hover:text-[#244D38]">
               {es ? "Iniciar sesión" : "Business login"}
             </Link>
-
-            <a
-              href="#contacto"
-              className="transition hover:text-[#244D38]"
-            >
+            <a href="#contacto" className="hover:text-[#244D38]">
               {es ? "Contacto" : "Contact"}
             </a>
-
             <Link
               href={es ? "/en" : "/es"}
-              className="transition hover:tex t-[#244D38]"
+              className="hover:text-[#244D38]"
             >
               {t.switchLang}
             </Link>

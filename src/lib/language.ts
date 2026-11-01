@@ -4,7 +4,7 @@ const SPANISH = new Set(
   "el la los las de del que y en un una por para con no si sí hay todavía tienes tienen cuánto cuanto cuántos quiero dame apártame aparta me mi nombre gracias hola buenas está esta son soy porfa favor claro órale orale sale va".split(" "),
 );
 const ENGLISH = new Set(
-  "the a an is are do does you your have has any still how much many want i i'm im my name please thanks thank hi hello can could reserve order for of and what yes yeah sure ok okay".split(" "),
+  "the a an is are do does you your have has any still how much many want i i'm im my name please thanks thank hi hello can could reserve order for of and what yes yeah sure".split(" "),
 );
 
 function guess(text: string): "es" | "en" | null {

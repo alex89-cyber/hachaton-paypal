@@ -35,10 +35,24 @@ export type Reservation = {
   paypalOrderId: string | null;
   paypalAuthorizationId: string | null;
   payerId: string | null;
+  /** 4 digits the customer says at the counter. Null on reservations made before codes existed. */
+  pickupCode: string | null;
 };
 
 export const isActive = (r: Reservation) =>
   r.status === "held" || r.status === "authorized";
+
+/** A pickup code not used by any active reservation of the stall. */
+export function newPickupCode(reservations: Reservation[]) {
+  const taken = new Set(reservations.filter(isActive).map((r) => r.pickupCode));
+  for (;;) {
+    const code = String(Math.floor(Math.random() * 10_000)).padStart(4, "0");
+    if (!taken.has(code)) return code;
+  }
+}
+
+/** The reservations this browser made, so the stall page can show "Your reservation". */
+export const HOLDS_COOKIE = "th_holds";
 
 export const PAYER_COOKIE = "th_payer";
 

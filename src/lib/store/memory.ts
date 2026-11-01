@@ -16,6 +16,7 @@ import {
 import {
   cashUp,
   isActive,
+  newPickupCode,
   type Reservation,
   type Sale,
   type StallState,
@@ -710,6 +711,7 @@ export const memoryStore: StallStore = {
     const r: Reservation = {
       id: crypto.randomUUID(),
       customerName,
+      pickupCode: newPickupCode(s.reservations),
       lines,
 
       totalCents:

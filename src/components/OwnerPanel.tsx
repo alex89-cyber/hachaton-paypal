@@ -1282,12 +1282,25 @@ function Reservations({
   ) => void;
 }) {
   const o = t.owner;
+  const [code, setCode] = useState("");
 
   const active = view.reservations.filter(
     (r) =>
       r.status === "held" ||
       r.status === "authorized",
   );
+  const withCode = active.some((r) => r.pickupCode);
+  // Typing the customer's 4 digits leaves only their order.
+  const shown =
+    code.length === 4
+      ? active.filter((r) => r.pickupCode === code)
+      : active;
+
+  const deliver = (r: Reservation) => {
+    if (r.pickupCode && r.pickupCode !== code && !window.confirm(fill(o.deliverNoCode, { name: r.customerName }))) return;
+    setCode("");
+    onDeliver(r.id);
+  };
 
   const done = view.reservations
     .filter(
@@ -1402,15 +1415,44 @@ function Reservations({
         )}
       </h2>
 
-      {active.map((r) => (
+      {withCode && (
+        <label className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-bold">{o.pickupCode}</span>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            inputMode="numeric"
+            placeholder="0000"
+            aria-label={o.pickupCode}
+            className="w-32 rounded-xl border border-line bg-surface px-3 py-2 text-center font-mono text-2xl tracking-[0.3em]"
+          />
+          {code.length === 4 && shown.length === 0 && (
+            <span className="text-sm font-semibold text-bad">{o.pickupCodeNone}</span>
+          )}
+          {code && (
+            <button type="button" onClick={() => setCode("")} className="text-sm text-muted underline">
+              {o.pickupCodeClear}
+            </button>
+          )}
+        </label>
+      )}
+
+      {shown.map((r) => (
         <article
           key={r.id}
-          className="rounded-2xl border border-[#e9d4c5] bg-surface p-5 shadow-sm sm:p-6"
+          className={`rounded-2xl border bg-surface p-5 shadow-sm sm:p-6 ${
+            code.length === 4 ? "border-ok ring-2 ring-ok/40" : "border-[#e9d4c5]"
+          }`}
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xl font-extrabold text-[#302018]">
                 {r.customerName}
+                {r.pickupCode && (
+                  <span className="ml-2 rounded-lg bg-background px-2 py-0.5 font-mono text-base tracking-widest text-muted">
+                    #{r.pickupCode}
+                  </span>
+                )}
               </p>
 
               <p className="mt-1 text-sm">
@@ -1448,9 +1490,7 @@ function Reservations({
           <div className="mt-5 grid grid-cols-[1fr_auto] gap-3">
             <button
               type="button"
-              onClick={() =>
-                onDeliver(r.id)
-              }
+              onClick={() => deliver(r)}
               disabled={
                 busy ||
                 r.status !== "authorized"

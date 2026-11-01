@@ -29,13 +29,19 @@ import {
 // TIPOS ORIGINALES
 // ==========================================
 
+/** An active reservation, as its customer sees it. */
+export type HeldOrder = {
+  code: string | null;
+  items: string;
+  pickupBy: string;
+  totalCents: number;
+};
+
 export type Confirmation =
-  | {
+  | ({
       kind: "reserved";
       name: string;
-      pickupBy: string;
-      totalCents: number;
-    }
+    } & HeldOrder)
   | {
       kind: "cancelled";
     }
@@ -280,6 +286,7 @@ export function PublicStall({
   lang,
   timezone,
   confirmation,
+  holds,
   stampCard,
   vapidKey,
   t,
@@ -288,6 +295,7 @@ export function PublicStall({
   lang: "es" | "en";
   timezone: string;
   confirmation: Confirmation | null;
+  holds: HeldOrder[];
   stampCard: StampCardInfo | null;
   vapidKey: string | null;
   t: Dictionary;
@@ -594,6 +602,89 @@ export function PublicStall({
       `}</style>
 
       {/* ===================================
+          CONFIRMACIÓN DE APARTADO ORIGINAL
+      =================================== */}
+
+      {confirmation && (
+        <div
+          role="status"
+          className={`rounded-3xl border p-5 shadow-sm sm:p-6 ${
+            confirmation.kind === "reserved"
+              ? "border-ok/20 bg-ok-soft text-ok"
+              : "border-warn/20 bg-warn-soft text-warn"
+          }`}
+        >
+          {confirmation.kind ===
+          "reserved" ? (
+            <div className="space-y-2">
+              <p className="text-lg font-extrabold sm:text-xl">
+                {fill(
+                  t.public.confirmedTitle,
+                  {
+                    name:
+                      confirmation.name,
+                  },
+                )}
+              </p>
+
+              <p className="text-sm leading-relaxed">
+                {fill(
+                  t.public.confirmedBody,
+                  {
+                    time: clock(
+                      confirmation.pickupBy,
+                      timezone,
+                      lang,
+                    ),
+                    total: money(
+                      confirmation.totalCents,
+                      snap.currency,
+                      lang,
+                    ),
+                  },
+                )}
+              </p>
+
+              {confirmation.code && (
+                <PickupCode code={confirmation.code} t={t} />
+              )}
+
+              {stampCard && (
+                <p className="pt-1 text-sm font-semibold">
+                  ⭐ {t.public.stampsNext}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="font-semibold">
+              {confirmation.kind ===
+              "cancelled"
+                ? t.public.cancelledNote
+                : t.public.errorNote}
+            </p>
+          )}
+        </div>
+      )}
+
+      {holds.map((h) => (
+        <div
+          key={h.code ?? h.pickupBy}
+          role="status"
+          className="space-y-2 rounded-3xl border border-ok/20 bg-ok-soft p-5 text-ok shadow-sm sm:p-6"
+        >
+          <p className="text-lg font-extrabold">{t.public.yourHold}</p>
+          <p className="text-sm leading-relaxed">
+            {fill(t.public.reservedSummary, {
+              items: h.items,
+              total: money(h.totalCents, snap.currency, lang),
+              time: clock(h.pickupBy, timezone, lang),
+            })}
+          </p>
+          {h.code && <PickupCode code={h.code} t={t} />}
+        </div>
+      ))}
+
+      {/* ===================================
           ENCABEZADO ORIGINAL
       =================================== */}
 
@@ -803,67 +894,6 @@ export function PublicStall({
           )}
         </div>
       </header>
-
-      {/* ===================================
-          CONFIRMACIÓN DE APARTADO ORIGINAL
-      =================================== */}
-
-      {confirmation && (
-        <div
-          role="status"
-          className={`rounded-3xl border p-5 shadow-sm sm:p-6 ${
-            confirmation.kind === "reserved"
-              ? "border-ok/20 bg-ok-soft text-ok"
-              : "border-warn/20 bg-warn-soft text-warn"
-          }`}
-        >
-          {confirmation.kind ===
-          "reserved" ? (
-            <div className="space-y-2">
-              <p className="text-lg font-extrabold sm:text-xl">
-                {fill(
-                  t.public.confirmedTitle,
-                  {
-                    name:
-                      confirmation.name,
-                  },
-                )}
-              </p>
-
-              <p className="text-sm leading-relaxed">
-                {fill(
-                  t.public.confirmedBody,
-                  {
-                    time: clock(
-                      confirmation.pickupBy,
-                      timezone,
-                      lang,
-                    ),
-                    total: money(
-                      confirmation.totalCents,
-                      snap.currency,
-                      lang,
-                    ),
-                  },
-                )}
-              </p>
-
-              {stampCard && (
-                <p className="pt-1 text-sm font-semibold">
-                  ⭐ {t.public.stampsNext}
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="font-semibold">
-              {confirmation.kind ===
-              "cancelled"
-                ? t.public.cancelledNote
-                : t.public.errorNote}
-            </p>
-          )}
-        </div>
-      )}
 
       {/* ===================================
           MENÚ PÚBLICO ORIGINAL
@@ -1622,5 +1652,16 @@ function StampCard({
         </form>
       )}
     </section>
+  );
+}
+
+function PickupCode({ code, t }: { code: string; t: Dictionary }) {
+  return (
+    <div className="flex items-center gap-4 pt-1">
+      <span className="rounded-2xl bg-surface px-4 py-2 font-mono text-3xl font-black tracking-[0.3em] text-foreground">
+        {code}
+      </span>
+      <span className="text-sm font-semibold leading-snug">{t.public.pickupCodeHint}</span>
+    </div>
   );
 }

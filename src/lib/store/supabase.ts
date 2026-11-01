@@ -93,14 +93,24 @@ type ReservationRow = {
   paypal_order_id: string | null;
   paypal_authorization_id: string | null;
   payer_id: string | null;
+  pickup_code?: string | null;
   reservation_items: {
     dish_id: string;
     qty: number;
   }[];
 };
 
-const RESERVATION_COLS =
+const RESERVATION_COLS_BASE =
   "id, customer_name, total_cents, status, pickup_by, created_at, paypal_order_id, paypal_authorization_id, payer_id, reservation_items(dish_id, qty)";
+// pickup_code arrives with migration 0008; until it runs, reservations load without it.
+const RESERVATION_COLS = `${RESERVATION_COLS_BASE}, pickup_code`;
+
+async function withPickupCode<R extends { error: { message: string } | null }>(
+  query: (cols: string) => PromiseLike<R>,
+): Promise<R> {
+  const result = await query(RESERVATION_COLS);
+  return result.error?.message.includes("pickup_code") ? query(RESERVATION_COLS_BASE) : result;
+}
 
 const toReservation = (
   r: ReservationRow
@@ -115,6 +125,7 @@ const toReservation = (
   paypalAuthorizationId:
     r.paypal_authorization_id,
   payerId: r.payer_id,
+  pickupCode: r.pickup_code ?? null,
   lines: r.reservation_items.map((line) => ({
     dishId: line.dish_id,
     qty: line.qty,
@@ -224,17 +235,19 @@ async function load(
         })
         .limit(1)
         .maybeSingle(),
-      db()
-        .from("reservations")
-        .select(RESERVATION_COLS)
-        .eq("business_id", b.id)
-        .gte("created_at", recent)
-        .order("created_at"),
+      withPickupCode((cols) =>
+        db()
+          .from("reservations")
+          .select(cols)
+          .eq("business_id", b.id)
+          .gte("created_at", recent)
+          .order("created_at"),
+      ),
     ]);
 
   const reservations = (
     (check(resRes, "reservations") ??
-      []) as ReservationRow[]
+      []) as unknown as ReservationRow[]
   ).map(toReservation);
 
   const payers = [
@@ -853,17 +866,16 @@ export const supabaseStore: StallStore = {
     const business = await must(slug);
 
     const row = check(
-      await db()
-        .from("reservations")
-        .select(RESERVATION_COLS)
-        .eq("id", id)
-        .eq(
-          "business_id",
-          business.id
-        )
-        .maybeSingle(),
+      await withPickupCode((cols) =>
+        db()
+          .from("reservations")
+          .select(cols)
+          .eq("id", id)
+          .eq("business_id", business.id)
+          .maybeSingle(),
+      ),
       "reservation"
-    ) as ReservationRow | null;
+    ) as unknown as ReservationRow | null;
 
     return row
       ? toReservation(row)

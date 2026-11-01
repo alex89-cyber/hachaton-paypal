@@ -32,6 +32,7 @@ import {
 /** An active reservation, as its customer sees it. */
 export type HeldOrder = {
   code: string | null;
+  orderNumber: number | null;
   items: string;
   pickupBy: string;
   totalCents: number;
@@ -645,6 +646,12 @@ export function PublicStall({
                 )}
               </p>
 
+              {confirmation.orderNumber && (
+                <p className="text-sm font-bold">
+                  {fill(t.public.orderNumber, { n: confirmation.orderNumber })}
+                </p>
+              )}
+
               {confirmation.code && (
                 <PickupCode code={confirmation.code} t={t} />
               )}
@@ -672,7 +679,10 @@ export function PublicStall({
           role="status"
           className="space-y-2 rounded-3xl border border-ok/20 bg-ok-soft p-5 text-ok shadow-sm sm:p-6"
         >
-          <p className="text-lg font-extrabold">{t.public.yourHold}</p>
+          <p className="text-lg font-extrabold">
+            {t.public.yourHold}
+            {h.orderNumber ? ` · ${fill(t.public.orderNumber, { n: h.orderNumber })}` : ""}
+          </p>
           <p className="text-sm leading-relaxed">
             {fill(t.public.reservedSummary, {
               items: h.items,

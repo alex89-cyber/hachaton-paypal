@@ -424,12 +424,15 @@ export function OwnerPanel({
         timezone={timezone}
         fmt={fmt}
         busy={busy}
-        onDeliver={async (id) => {
+        onDeliver={async (id, proof) => {
           const r = await act({
             action: "deliver",
             reservationId: id,
+            ...proof,
           });
 
+          // A wrong code or last name stays in the dialog for another try.
+          if (r?.error === "wrong_code" || r?.error === "wrong_last_name") return r.error;
           if (r?.error) {
             setToast({
               kind: "bad",
@@ -441,6 +444,7 @@ export function OwnerPanel({
               text: o.delivered,
             });
           }
+          return null;
         }}
         onCancel={async (id) => {
           const r = await act({
@@ -1274,7 +1278,10 @@ function Reservations({
   timezone: string;
   fmt: (c: number) => string;
   busy: boolean;
-  onDeliver: (id: string) => void;
+  onDeliver: (
+    id: string,
+    proof: { code?: string; lastName?: string },
+  ) => Promise<string | null>;
   onCancel: (id: string) => void;
   onRedeem: (
     id: string,
@@ -1282,24 +1289,18 @@ function Reservations({
   ) => void;
 }) {
   const o = t.owner;
-  const [code, setCode] = useState("");
+  // The reservation whose code is being asked for at the counter.
+  const [handing, setHanding] = useState<Reservation | null>(null);
 
   const active = view.reservations.filter(
     (r) =>
       r.status === "held" ||
       r.status === "authorized",
   );
-  const withCode = active.some((r) => r.pickupCode);
-  // Typing the customer's 4 digits leaves only their order.
-  const shown =
-    code.length === 4
-      ? active.filter((r) => r.pickupCode === code)
-      : active;
 
   const deliver = (r: Reservation) => {
-    if (r.pickupCode && r.pickupCode !== code && !window.confirm(fill(o.deliverNoCode, { name: r.customerName }))) return;
-    setCode("");
-    onDeliver(r.id);
+    if (r.pickupCode) setHanding(r);
+    else void onDeliver(r.id, {});
   };
 
   const done = view.reservations
@@ -1415,44 +1416,33 @@ function Reservations({
         )}
       </h2>
 
-      {withCode && (
-        <label className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-bold">{o.pickupCode}</span>
-          <input
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
-            inputMode="numeric"
-            placeholder="0000"
-            aria-label={o.pickupCode}
-            className="w-32 rounded-xl border border-line bg-surface px-3 py-2 text-center font-mono text-2xl tracking-[0.3em]"
-          />
-          {code.length === 4 && shown.length === 0 && (
-            <span className="text-sm font-semibold text-bad">{o.pickupCodeNone}</span>
-          )}
-          {code && (
-            <button type="button" onClick={() => setCode("")} className="text-sm text-muted underline">
-              {o.pickupCodeClear}
-            </button>
-          )}
-        </label>
+      {handing && (
+        <HandOverDialog
+          r={handing}
+          items={items(handing)}
+          t={t}
+          busy={busy}
+          onClose={() => setHanding(null)}
+          onDeliver={async (proof) => {
+            const error = await onDeliver(handing.id, proof);
+            if (!error) setHanding(null);
+            return error;
+          }}
+        />
       )}
 
-      {shown.map((r) => (
+      {active.map((r) => (
         <article
           key={r.id}
-          className={`rounded-2xl border bg-surface p-5 shadow-sm sm:p-6 ${
-            code.length === 4 ? "border-ok ring-2 ring-ok/40" : "border-[#e9d4c5]"
-          }`}
+          className="rounded-2xl border border-[#e9d4c5] bg-surface p-5 shadow-sm sm:p-6"
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xl font-extrabold text-[#302018]">
-                {r.customerName}
-                {r.pickupCode && (
-                  <span className="ml-2 rounded-lg bg-background px-2 py-0.5 font-mono text-base tracking-widest text-muted">
-                    #{r.pickupCode}
-                  </span>
+                {r.orderNumber && (
+                  <span className="mr-2 text-brand">#{r.orderNumber}</span>
                 )}
+                {r.customerName}
               </p>
 
               <p className="mt-1 text-sm">
@@ -1521,6 +1511,7 @@ function Reservations({
         >
           <p className="flex justify-between gap-3 text-sm text-muted">
             <span className="min-w-0 truncate">
+              {r.orderNumber ? `#${r.orderNumber} · ` : ""}
               {r.customerName} ·{" "}
               {items(r)}
             </span>
@@ -1540,6 +1531,139 @@ function Reservations({
         </div>
       ))}
     </section>
+  );
+}
+
+/* ========================================
+   ENTREGA CON CÓDIGO
+======================================== */
+
+function HandOverDialog({
+  r,
+  items,
+  t,
+  busy,
+  onClose,
+  onDeliver,
+}: {
+  r: Reservation;
+  items: string;
+  t: Dictionary;
+  busy: boolean;
+  onClose: () => void;
+  onDeliver: (proof: { code?: string; lastName?: string }) => Promise<string | null>;
+}) {
+  const o = t.owner;
+  const [code, setCode] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [noCode, setNoCode] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Bumped on each wrong try so the boxes shake again.
+  const [tries, setTries] = useState(0);
+
+  async function submit(proof: { code?: string; lastName?: string }) {
+    const e = await onDeliver(proof);
+    if (!e) return;
+    setError(e === "wrong_code" ? o.handWrongCode : o.handWrongLastName);
+    setTries((n) => n + 1);
+    if (e === "wrong_code") setCode("");
+  }
+
+  function type(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 4);
+    setCode(digits);
+    setError(null);
+    if (digits.length === 4) void submit({ code: digits });
+  }
+
+  return (
+    <Sheet>
+      <p className="text-sm font-bold uppercase tracking-wide text-muted">{o.handTitle}</p>
+      <p className="mt-2 text-2xl font-black text-[#302018]">
+        {r.orderNumber && <span className="text-brand">#{r.orderNumber} · </span>}
+        {r.customerName}
+      </p>
+      <p className="mt-1 text-sm">{items}</p>
+
+      {!noCode ? (
+        <>
+          <p className="mt-6 font-semibold">{o.handAskCode}</p>
+          <label key={tries} className={`relative mt-3 flex justify-center gap-3 ${tries ? "animate-shake" : ""}`}>
+            {[0, 1, 2, 3].map((i) => (
+              <span
+                key={i}
+                className={`flex h-16 w-14 items-center justify-center rounded-2xl border-2 font-mono text-3xl font-black ${
+                  error ? "border-bad text-bad" : i === code.length ? "border-brand" : "border-line"
+                }`}
+              >
+                {code[i] ?? ""}
+              </span>
+            ))}
+            <input
+              autoFocus
+              value={code}
+              onChange={(e) => type(e.target.value)}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              aria-label={o.handAskCode}
+              disabled={busy}
+              className="absolute inset-0 opacity-0"
+            />
+          </label>
+          {error && <p className="mt-3 text-center font-semibold text-bad">{error}</p>}
+          <button
+            type="button"
+            onClick={() => {
+              setNoCode(true);
+              setError(null);
+            }}
+            className="mt-5 block w-full text-center text-sm text-muted underline"
+          >
+            {o.handNoCode}
+          </button>
+        </>
+      ) : (
+        <form
+          className="mt-6 flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit({ lastName });
+          }}
+        >
+          <label className="flex flex-col gap-2">
+            <span className="font-semibold">{o.handAskLastName}</span>
+            <input
+              autoFocus
+              value={lastName}
+              onChange={(e) => {
+                setLastName(e.target.value);
+                setError(null);
+              }}
+              className={`rounded-xl border-2 bg-background px-4 py-3 text-lg ${error ? "border-bad" : "border-line"}`}
+            />
+          </label>
+          {error && <p key={tries} className="animate-shake font-semibold text-bad">{error}</p>}
+          <button
+            type="submit"
+            disabled={busy || lastName.trim().length < 2}
+            className="rounded-xl bg-ok px-5 py-3.5 font-bold text-white disabled:opacity-40"
+          >
+            {o.deliver}
+          </button>
+          <button type="button" onClick={() => setNoCode(false)} className="text-sm text-muted underline">
+            {o.handBackToCode}
+          </button>
+        </form>
+      )}
+
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-4 w-full rounded-xl border border-line px-5 py-3 font-semibold"
+      >
+        {o.handCancel}
+      </button>
+    </Sheet>
   );
 }
 

@@ -7,7 +7,7 @@ import {
   PayPalError,
   voidAuthorization,
 } from "./paypal";
-import type { Reservation, StallState } from "./stall";
+import { lastNameMatches, type Reservation, type StallState } from "./stall";
 import { notifyWaiting } from "./push";
 import { store } from "./store";
 
@@ -85,11 +85,24 @@ export async function cancelApproval(slug: string, id: string): Promise<void> {
   if (r?.status === "held") await store.release(slug, id, "voided");
 }
 
+/** What the owner typed at the counter: the customer's code, or their last name if they lost it. */
+export type PickupProof = { code?: string; lastName?: string };
+
 /** "Entregado": charge the held payment and record the sale. */
-export async function deliver(slug: string, id: string): Promise<"ok" | "not_found" | "not_authorized"> {
+export async function deliver(
+  slug: string,
+  id: string,
+  proof: PickupProof = {},
+): Promise<"ok" | "not_found" | "not_authorized" | "wrong_code" | "wrong_last_name"> {
   const r = await store.getReservation(slug, id);
   if (!r) return "not_found";
   if (r.status !== "authorized" || !r.paypalAuthorizationId) return "not_authorized";
+  // Reservations from before codes existed are handed over as they always were.
+  if (r.pickupCode) {
+    if (proof.lastName !== undefined) {
+      if (!lastNameMatches(r.customerName, proof.lastName)) return "wrong_last_name";
+    } else if (proof.code !== r.pickupCode) return "wrong_code";
+  }
   await captureAuthorization(r.paypalAuthorizationId);
   await store.markDelivered(slug, id);
   return "ok";

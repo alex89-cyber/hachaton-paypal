@@ -401,6 +401,8 @@ const Action = z.discriminatedUnion(
     z.object({
       action: z.literal("deliver"),
       reservationId: z.string().min(1),
+      code: z.string().max(8).optional(),
+      lastName: z.string().max(80).optional(),
     }),
 
     z.object({
@@ -826,12 +828,18 @@ export async function POST(
           const r = await deliver(
             slug,
             a.reservationId,
+            { code: a.code, lastName: a.lastName },
           );
 
           if (r !== "ok") {
             return Response.json(
               { error: r },
-              { status: 409 },
+              {
+                status:
+                  r === "wrong_code" || r === "wrong_last_name"
+                    ? 403
+                    : 409,
+              },
             );
           }
         } else {

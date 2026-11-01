@@ -87,6 +87,7 @@ function heldOrder(s: StallState, lang: "es" | "en", r: Reservation): HeldOrder 
   const name = new Map(s.dishes.map((d) => [d.id, lang === "es" ? d.nameEs : d.nameEn]));
   return {
     code: r.pickupCode,
+    orderNumber: r.orderNumber,
     pickupBy: r.pickupBy,
     totalCents: r.totalCents,
     items: r.lines.map((l) => `${l.qty} × ${name.get(l.dishId) ?? "?"}`).join(", "),

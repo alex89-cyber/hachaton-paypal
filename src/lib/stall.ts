@@ -37,7 +37,35 @@ export type Reservation = {
   payerId: string | null;
   /** 4 digits the customer says at the counter. Null on reservations made before codes existed. */
   pickupCode: string | null;
+  /** Public order number, counted from 1 each business day. */
+  orderNumber: number | null;
 };
+
+/** What the owner's screen shows instead of the code, so only the customer knows it. */
+export const HIDDEN_CODE = "****";
+
+const plain = (x: string) =>
+  x.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
+
+/** "Ana Ramírez López" → "Ana R.": enough to find the order, not to answer for the customer. */
+export function shortName(name: string) {
+  const [first, ...rest] = name.trim().split(/\s+/);
+  return rest.length ? `${first} ${rest[0][0].toUpperCase()}.` : (first ?? "");
+}
+
+/** Whether a typed last name matches the reservation's, ignoring case and accents. */
+export function lastNameMatches(name: string, typed: string) {
+  const words = name.trim().split(/\s+/);
+  const last = plain((words.length > 1 ? words.slice(1) : words).join(" "));
+  const t = plain(typed);
+  return t.length > 1 && (last === t || last.split(/\s+/).includes(t));
+}
+
+/** The next order number for a day opened at openedAt. */
+export function nextOrderNumber(reservations: Reservation[], openedAt: string | null) {
+  const since = openedAt ?? "";
+  return 1 + Math.max(0, ...reservations.filter((r) => r.createdAt >= since).map((r) => r.orderNumber ?? 0));
+}
 
 export const isActive = (r: Reservation) =>
   r.status === "held" || r.status === "authorized";
@@ -428,12 +456,19 @@ export function ownerView(
 
     loyalty: s.loyalty,
 
-    reservations: [...s.reservations].sort(
-      (a, b) =>
-        Number(isActive(b)) -
-          Number(isActive(a)) ||
-        a.pickupBy.localeCompare(b.pickupBy),
-    ),
+    reservations: [...s.reservations]
+      .sort(
+        (a, b) =>
+          Number(isActive(b)) -
+            Number(isActive(a)) ||
+          a.pickupBy.localeCompare(b.pickupBy),
+      )
+      // The owner confirms the code or last name with the customer, so neither is shown.
+      .map((r) => ({
+        ...r,
+        customerName: shortName(r.customerName),
+        pickupCode: r.pickupCode ? HIDDEN_CODE : null,
+      })),
 
     dishes: s.dishes.map((d) => {
       const a = avail.get(d.id);

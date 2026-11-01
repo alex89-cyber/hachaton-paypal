@@ -60,7 +60,7 @@ ${menu}
 Rules:
 - Answer only from the live state above. Never invent dishes, prices or availability. Portion counts are estimates: say "unos 12" / "about 12", never promise an exact number.
 - If the stall is closed or a dish is sold out, say so plainly and suggest what is still available. They can also tap "Avísame" on the page to get a phone alert when it opens or the dish comes back.
-- Reserving needs two things from the customer: the order (dishes and quantities, max 10 per dish) and the name to pick it up under. If they have not written their name in this chat, ask for it before summarizing; never guess or invent one. Before reserving, summarize the order with its total and tell them they must pick it up within ${s.holdMinutes} minutes. Ask them to confirm. Only call reserve_order after they clearly say yes.
+- Reserving needs from the customer: the order (dishes and quantities, max 10 per dish) and their first name and one last name, which the stall asks for at pickup if they lose their code. If they have not written both names in this chat, ask for what is missing before summarizing; never guess or invent a name. Before reserving, summarize the order with its total and tell them they must pick it up within ${s.holdMinutes} minutes. Ask them to confirm. Only call reserve_order after they clearly say yes.
 - How payment works, if they ask or when you summarize: PayPal holds the money now and the stall only charges it when they pick up. If they do not arrive in time, the hold is released and nothing is charged. They can pay with a PayPal account or a card.
 - After reserve_order succeeds, tell them to tap the PayPal button that appears below your message to finish, and that once they pay they get a 4-digit pickup code to say at the counter. Never write links or URLs.
 - If reserve_order fails, explain why in one sentence and offer an alternative.
@@ -74,12 +74,13 @@ function stampRule(s: StallState) {
   return `- Stamp card: every order reserved and paid with PayPal, or paid at the stall giving a phone number, earns a stamp; ${s.loyalty.stampsPerReward} stamps earn a free ${reward.nameEs} / ${reward.nameEn}. Mention it only if they ask about rewards or it fits naturally.\n`;
 }
 
-/** The name must come from something the customer wrote, so the model can't make one up. */
+/** First name and last name must come from what the customer wrote, so the model can't make them up. */
 function nameGiven(name: string, messages: ChatMessage[]) {
   const plain = (x: string) => x.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
   const words = (x: string) => plain(x).split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 1);
   const said = new Set(messages.filter((m) => m.role === "user").flatMap((m) => words(m.content)));
-  return words(name).some((w) => said.has(w));
+  const given = words(name);
+  return given.length >= 2 && given.every((w) => said.has(w));
 }
 
 export async function chat(
@@ -94,7 +95,7 @@ export async function chat(
     description:
       "Reserve dishes for pickup. Takes the stock now and creates a PayPal payment the customer approves with a button. Call only after the customer confirmed the order.",
     inputSchema: z.object({
-      customerName: z.string().min(1).max(60).describe("Customer's first name, for the pickup"),
+      customerName: z.string().min(3).max(60).describe("Customer's first name and last name, as they wrote them"),
       items: z
         .array(z.object({ dishId: z.enum(ids), qty: z.number().int().min(1).max(10) }))
         .min(1)
@@ -103,7 +104,7 @@ export async function chat(
     execute: async ({ customerName, items }) => {
       if (reservation) return { ok: false, error: "A reservation was already created in this message." };
       if (!nameGiven(customerName, messages))
-        return { ok: false, error: "The customer has not told you their name. Ask for it, then summarize and confirm again." };
+        return { ok: false, error: "The customer has not told you their first name and last name. Ask for what is missing, then summarize and confirm again." };
       const res = await startReservation(s, {
         customerName,
         lines: items.map((i) => ({ dishId: i.dishId, qty: i.qty })),

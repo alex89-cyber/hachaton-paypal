@@ -94,6 +94,7 @@ type ReservationRow = {
   paypal_authorization_id: string | null;
   payer_id: string | null;
   pickup_code?: string | null;
+  order_number?: number | null;
   reservation_items: {
     dish_id: string;
     qty: number;
@@ -102,14 +103,22 @@ type ReservationRow = {
 
 const RESERVATION_COLS_BASE =
   "id, customer_name, total_cents, status, pickup_by, created_at, paypal_order_id, paypal_authorization_id, payer_id, reservation_items(dish_id, qty)";
-// pickup_code arrives with migration 0008; until it runs, reservations load without it.
-const RESERVATION_COLS = `${RESERVATION_COLS_BASE}, pickup_code`;
+// pickup_code (migration 0008) and order_number (0009) load only once their migration ran.
+const RESERVATION_COLS = [
+  `${RESERVATION_COLS_BASE}, pickup_code, order_number`,
+  `${RESERVATION_COLS_BASE}, pickup_code`,
+  RESERVATION_COLS_BASE,
+];
 
 async function withPickupCode<R extends { error: { message: string } | null }>(
   query: (cols: string) => PromiseLike<R>,
 ): Promise<R> {
-  const result = await query(RESERVATION_COLS);
-  return result.error?.message.includes("pickup_code") ? query(RESERVATION_COLS_BASE) : result;
+  let result = await query(RESERVATION_COLS[0]);
+  for (const cols of RESERVATION_COLS.slice(1)) {
+    if (!/pickup_code|order_number/.test(result.error?.message ?? "")) break;
+    result = await query(cols);
+  }
+  return result;
 }
 
 const toReservation = (
@@ -126,6 +135,7 @@ const toReservation = (
     r.paypal_authorization_id,
   payerId: r.payer_id,
   pickupCode: r.pickup_code ?? null,
+  orderNumber: r.order_number ?? null,
   lines: r.reservation_items.map((line) => ({
     dishId: line.dish_id,
     qty: line.qty,

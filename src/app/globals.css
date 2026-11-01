@@ -88,3 +88,13 @@ body {
   color: var(--brand);
 }
 .th-ticket-thanks { margin-top: 12px; text-align: center; font-size: 11px; color: var(--muted); }
+
+/* Wrong pickup code: the boxes shake, like a rejected PIN. */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+.animate-shake {
+  animation: shake 0.35s ease-in-out;
+}

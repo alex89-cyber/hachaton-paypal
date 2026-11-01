@@ -3,6 +3,7 @@ import {
   cashUp,
   type PaymentMethod,
   type ReservationStatus,
+  shortName,
   type StallState,
 } from "./stall";
 
@@ -198,7 +199,7 @@ export function cashUpTables(
 
   const apartados: ReservationRow[] =
     s.reservations.map((reservation) => ({
-      cliente: reservation.customerName,
+      cliente: shortName(reservation.customerName),
       estado: STATUS[lang][reservation.status],
       platillos: reservation.lines
         .map(

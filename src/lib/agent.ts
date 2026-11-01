@@ -5,6 +5,7 @@ import { z } from "zod";
 import { menuAvailability } from "./inventory";
 import { startReservation } from "./reservations";
 import { replyLanguage } from "./language";
+import { offlineReply } from "./offline-reply";
 import type { StallState } from "./stall";
 
 // The "¿Todavía hay?" agent on the public page. It answers from the live menu
@@ -21,7 +22,7 @@ export type AgentReservation = {
   lines: { name: string; qty: number }[];
 };
 
-export type AgentReply = { reply: string; reservation?: AgentReservation };
+export type AgentReply = { reply: string; reservation?: AgentReservation; offline?: boolean };
 
 // GOOGLE_GENERATIVE_AI_BASE_URL only points local tests at a fake Gemini.
 const google = createGoogleGenerativeAI({ baseURL: process.env.GOOGLE_GENERATIVE_AI_BASE_URL || undefined });
@@ -83,6 +84,9 @@ function nameGiven(name: string, messages: ChatMessage[]) {
   const given = words(name);
   return given.length >= 2 && given.every((w) => said.has(w));
 }
+
+const REST_MS = 60_000;
+let restUntil = 0;
 
 export async function chat(
   s: StallState,
@@ -157,8 +161,8 @@ export async function chat(
     });
 
   let result: Awaited<ReturnType<typeof run>> | undefined;
-  let lastError: unknown;
-  for (const modelId of [...new Set(MODELS)]) {
+  let lastError: unknown = "resting after running out of quota";
+  for (const modelId of Date.now() < restUntil ? [] : [...new Set(MODELS)]) {
     try {
       result = await run(modelId);
       console.log(`agent: ${modelId}`);
@@ -168,7 +172,13 @@ export async function chat(
       console.error(`agent: ${modelId} failed: ${describe(e)}`);
     }
   }
-  if (!result) throw lastError;
+  if (!result) {
+    // Out of quota or down: answer from the inventory rather than an error,
+    // and give Gemini a minute before trying again.
+    if (Date.now() >= restUntil) restUntil = Date.now() + REST_MS;
+    console.error(`agent: every model failed, answering offline: ${describe(lastError)}`);
+    return { reply: offlineReply(s, messages.at(-1)?.content ?? "", ctx.lang), offline: true };
+  }
   console.log(`agent: ${result.steps.length} step(s) in ${Date.now() - started} ms`);
 
   const reply = result.text.trim();

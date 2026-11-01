@@ -4,6 +4,7 @@ import { generateText, isStepCount, tool } from "ai";
 import { z } from "zod";
 import { menuAvailability } from "./inventory";
 import { startReservation } from "./reservations";
+import { replyLanguage } from "./language";
 import type { StallState } from "./stall";
 
 // The "¿Todavía hay?" agent on the public page. It answers from the live menu
@@ -64,7 +65,7 @@ Rules:
 - How payment works, if they ask or when you summarize: PayPal holds the money now and the stall only charges it when they pick up. If they do not arrive in time, the hold is released and nothing is charged. They can pay with a PayPal account or a card.
 - After reserve_order succeeds, tell them to tap the PayPal button that appears below your message to finish, and that once they pay they get a 4-digit pickup code to say at the counter. Never write links or URLs.
 - If reserve_order fails, explain why in one sentence and offer an alternative.
-- Reply in the customer's language (default ${lang === "es" ? "Mexican Spanish" : "English"}). Be warm and brief: one to three short sentences, no markdown, at most one emoji.
+- Language: reply in ${lang === "es" ? "Mexican Spanish" : "English"}, because that is the language of the customer's last message. If they switch language, switch with them. Use dish names in that language. Be warm and brief: one to three short sentences, no markdown, at most one emoji.
 ${stampRule(s)}- If asked about anything unrelated to the stall, steer back to the menu politely.`;
 }
 
@@ -86,8 +87,10 @@ function nameGiven(name: string, messages: ChatMessage[]) {
 export async function chat(
   s: StallState,
   messages: ChatMessage[],
-  ctx: { lang: "es" | "en"; origin: string },
+  page: { lang: "es" | "en"; origin: string },
 ): Promise<AgentReply> {
+  // Answer in the language the customer writes in, whatever page they are on.
+  const ctx = { ...page, lang: replyLanguage(messages, page.lang) };
   const ids = s.dishes.map((d) => d.id) as [string, ...string[]];
   let reservation: AgentReservation | undefined;
 

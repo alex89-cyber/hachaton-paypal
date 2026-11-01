@@ -1,12 +1,20 @@
+
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
+
 import type { Dictionary } from "@/dictionaries";
 import { fill } from "@/lib/format";
 import type { OwnerView } from "@/lib/stall";
 
 const UNITS = ["g", "kg", "ml", "l", "pz"] as const;
+
 type Unit = (typeof UNITS)[number];
 
 type IngredientRow = {
@@ -25,44 +33,326 @@ type DishRow = {
   id: string | null;
   nameEs: string;
   nameEn: string;
+  imageUrl: string | null;
   price: string;
   recipe: RecipeRow[];
 };
+
+type EditorState = {
+  ingredients: IngredientRow[];
+  dishes: DishRow[];
+};
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+
+const IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
 
 let seq = 0;
 
 const newKey = () =>
   `new:${Date.now().toString(36)}${(seq++).toString(36)}`;
 
-const asUnit = (u: string): Unit =>
-  ((UNITS as readonly string[]).includes(u) ? u : "pz") as Unit;
+const asUnit = (unit: string): Unit =>
+  ((UNITS as readonly string[]).includes(unit)
+    ? unit
+    : "pz") as Unit;
 
-function fromView(view: OwnerView): {
-  ingredients: IngredientRow[];
-  dishes: DishRow[];
-} {
+const input =
+  "w-full min-w-0 rounded-xl border border-line bg-background px-3 py-2.5 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
+
+function fromView(view: OwnerView): EditorState {
   return {
-    ingredients: view.ingredients.map((i) => ({
-      key: i.id,
-      name: i.name,
-      unit: asUnit(i.unit),
+    ingredients: view.ingredients.map((ingredient) => ({
+      key: ingredient.id,
+      name: ingredient.name,
+      unit: asUnit(ingredient.unit),
     })),
-    dishes: view.dishes.map((d) => ({
-      rowKey: d.id,
-      id: d.id,
-      nameEs: d.nameEs,
-      nameEn: d.nameEn === d.nameEs ? "" : d.nameEn,
-      price: String(d.priceCents / 100),
-      recipe: d.recipe.map((r) => ({
-        ingredient: r.ingredientId,
-        qty: String(r.qty),
+
+    dishes: view.dishes.map((dish) => ({
+      rowKey: dish.id,
+      id: dish.id,
+      nameEs: dish.nameEs,
+      nameEn:
+        dish.nameEn === dish.nameEs
+          ? ""
+          : dish.nameEn,
+      imageUrl: dish.imageUrl ?? null,
+      price: String(dish.priceCents / 100),
+      recipe: dish.recipe.map((recipe) => ({
+        ingredient: recipe.ingredientId,
+        qty: String(recipe.qty),
       })),
     })),
   };
 }
 
-const input =
-  "w-full min-w-0 rounded-xl border border-line bg-background px-3 py-2.5 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10";
+function PhotoEditor({
+  slug,
+  lang,
+  dish,
+  onImageChange,
+}: {
+  slug: string;
+  lang: "es" | "en";
+  dish: DishRow;
+  onImageChange: (url: string | null) => void;
+}) {
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [broken, setBroken] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const es = lang === "es";
+
+  async function upload(file: File) {
+    setError(null);
+    setSuccess(false);
+    setBroken(false);
+
+    if (!IMAGE_TYPES.includes(file.type)) {
+      setError(
+        es
+          ? "Usa una fotografía JPG, PNG o WebP."
+          : "Please use a JPG, PNG or WebP photo.",
+      );
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      setError(
+        es
+          ? "La fotografía debe pesar menos de 5 MB."
+          : "The photo must be smaller than 5 MB.",
+      );
+      return;
+    }
+
+    if (file.size === 0) {
+      setError(
+        es
+          ? "El archivo está vacío."
+          : "The file is empty.",
+      );
+      return;
+    }
+
+    setUploading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch(
+        `/api/stalls/${encodeURIComponent(slug)}/image`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+
+      if (response.status === 401) {
+        throw new Error(
+          es
+            ? "Tu sesión terminó. Vuelve a ingresar al panel."
+            : "Your session expired. Please sign in again.",
+        );
+      }
+
+      const result = await response.json().catch(
+        () => null,
+      );
+
+      if (!response.ok || !result?.imageUrl) {
+        throw new Error(
+          es
+            ? "No se pudo subir la fotografía. Revisa Supabase Storage."
+            : "The photo could not be uploaded. Check Supabase Storage.",
+        );
+      }
+
+      onImageChange(result.imageUrl);
+      setSuccess(true);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : es
+            ? "Error al subir la fotografía."
+            : "Photo upload failed.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function chooseFile(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+
+    // Permite elegir otra vez el mismo archivo.
+    event.target.value = "";
+
+    if (file) {
+      void upload(file);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-line bg-background p-3 sm:p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold">
+            {es
+              ? "Fotografía del platillo"
+              : "Dish photo"}
+          </h3>
+
+          <p className="mt-1 text-xs text-muted">
+            {es
+              ? "Usa una foto real de tu platillo."
+              : "Use a real photo of your dish."}
+          </p>
+        </div>
+
+        {dish.imageUrl && (
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => {
+              onImageChange(null);
+              setSuccess(false);
+              setError(null);
+              setBroken(false);
+            }}
+            className="text-xs font-semibold text-bad underline disabled:opacity-50"
+          >
+            {es ? "Quitar foto" : "Remove photo"}
+          </button>
+        )}
+      </div>
+
+      <div className="relative mb-3 flex h-52 items-center justify-center overflow-hidden rounded-xl bg-surface sm:h-60">
+        {dish.imageUrl && !broken ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={dish.imageUrl}
+            src={dish.imageUrl}
+            alt={dish.nameEs || "Platillo"}
+            className="h-full w-full object-cover"
+            onError={() => setBroken(true)}
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-2 px-4 text-center text-muted">
+            <span className="text-4xl">📷</span>
+
+            <span className="text-sm">
+              {dish.imageUrl && broken
+                ? es
+                  ? "No se pudo mostrar la fotografía."
+                  : "Photo could not be displayed."
+                : es
+                  ? "Todavía no hay fotografía"
+                  : "No photo yet"}
+            </span>
+          </div>
+        )}
+
+        {uploading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/85">
+            <div className="flex flex-col items-center gap-2">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand/20 border-t-brand" />
+              <p className="text-sm font-semibold">
+                {es
+                  ? "Subiendo fotografía..."
+                  : "Uploading photo..."}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Abrir cámara trasera en dispositivos compatibles */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        capture="environment"
+        onChange={chooseFile}
+        disabled={uploading}
+        className="hidden"
+        aria-label={
+          es ? "Tomar fotografía" : "Take photo"
+        }
+      />
+
+      {/* Elegir archivo o imagen de la galería */}
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={chooseFile}
+        disabled={uploading}
+        className="hidden"
+        aria-label={
+          es ? "Elegir fotografía" : "Choose photo"
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => cameraRef.current?.click()}
+          className="flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+        >
+          <span>📷</span>
+          {es ? "Tomar foto" : "Take photo"}
+        </button>
+
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => galleryRef.current?.click()}
+          className="flex items-center justify-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-bold transition hover:bg-background disabled:opacity-50"
+        >
+          <span>🖼️</span>
+          {es ? "Elegir archivo" : "Choose file"}
+        </button>
+      </div>
+
+      <p className="mt-3 text-xs text-muted">
+        {es
+          ? "JPG, PNG o WebP. Máximo 5 MB. Después presiona Guardar cambios."
+          : "JPG, PNG or WebP. Maximum 5 MB. Then press Save changes."}
+      </p>
+
+      {success && (
+        <p className="mt-2 text-sm font-semibold text-ok">
+          {es
+            ? "Fotografía subida. Guarda los cambios del menú."
+            : "Photo uploaded. Save the menu changes."}
+        </p>
+      )}
+
+      {error && (
+        <p
+          role="alert"
+          className="mt-2 text-sm font-semibold text-bad"
+        >
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function MenuEditor({
   initial,
@@ -74,33 +364,33 @@ export function MenuEditor({
   t: Dictionary;
 }) {
   const m = t.menu;
-  const isSpanish = lang === "es";
+  const es = lang === "es";
+  const photoLang = es ? "es" : "en";
 
-  // Textos que cambian según el idioma seleccionado.
   const ui = {
-    ingredient: isSpanish ? "Ingrediente" : "Ingredient",
-    unit: isSpanish ? "Unidad de medida" : "Unit of measure",
-    dishesDescription: isSpanish
-      ? "Administra tus platillos, precios y recetas."
-      : "Manage your dishes, prices, and recipes.",
-    dishNumber: isSpanish ? "PLATILLO" : "DISH",
-    recipeDescription: isSpanish
+    ingredient: es ? "Ingrediente" : "Ingredient",
+    unit: es ? "Unidad de medida" : "Unit of measure",
+    dishesDescription: es
+      ? "Administra tus platillos, fotografías, precios y recetas."
+      : "Manage your dishes, photos, prices and recipes.",
+    dishNumber: es ? "PLATILLO" : "DISH",
+    recipeDescription: es
       ? "Ingredientes y cantidades por porción."
       : "Ingredients and quantities per serving.",
-    ingredientsCount: isSpanish ? "ingredientes" : "ingredients",
-    dishesCount: isSpanish ? "platillos" : "dishes",
+    ingredientsCount: es ? "ingredientes" : "ingredients",
+    dishesCount: es ? "platillos" : "dishes",
   };
 
-  const [saved, setSaved] = useState(() =>
-    JSON.stringify(fromView(initial))
-  );
-
   const [ingredients, setIngredients] = useState(
-    () => fromView(initial).ingredients
+    () => fromView(initial).ingredients,
   );
 
   const [dishes, setDishes] = useState(
-    () => fromView(initial).dishes
+    () => fromView(initial).dishes,
+  );
+
+  const [saved, setSaved] = useState(
+    () => JSON.stringify(fromView(initial)),
   );
 
   const [busy, setBusy] = useState(false);
@@ -111,48 +401,70 @@ export function MenuEditor({
   } | null>(null);
 
   const dirty = useMemo(
-    () => JSON.stringify({ ingredients, dishes }) !== saved,
-    [ingredients, dishes, saved]
+    () =>
+      JSON.stringify({ ingredients, dishes }) !== saved,
+    [ingredients, dishes, saved],
   );
 
   const unitOf = new Map(
-    ingredients.map((i) => [i.key, i.unit])
+    ingredients.map((ingredient) => [
+      ingredient.key,
+      ingredient.unit,
+    ]),
   );
 
-  const setDish = (k: string, patch: Partial<DishRow>) =>
-    setDishes((ds) =>
-      ds.map((d) =>
-        d.rowKey === k ? { ...d, ...patch } : d
-      )
+  const setDish = (
+    rowKey: string,
+    patch: Partial<DishRow>,
+  ) => {
+    setDishes((previous) =>
+      previous.map((dish) =>
+        dish.rowKey === rowKey
+          ? { ...dish, ...patch }
+          : dish,
+      ),
     );
+  };
 
   const setRecipe = (
-    k: string,
-    f: (r: RecipeRow[]) => RecipeRow[]
-  ) =>
-    setDishes((ds) =>
-      ds.map((d) =>
-        d.rowKey === k
-          ? { ...d, recipe: f(d.recipe) }
-          : d
-      )
+    rowKey: string,
+    update: (rows: RecipeRow[]) => RecipeRow[],
+  ) => {
+    setDishes((previous) =>
+      previous.map((dish) =>
+        dish.rowKey === rowKey
+          ? { ...dish, recipe: update(dish.recipe) }
+          : dish,
+      ),
     );
+  };
 
-  const move = (i: number, by: number) =>
-    setDishes((ds) => {
-      const j = i + by;
+  const move = (index: number, by: number) => {
+    setDishes((previous) => {
+      const target = index + by;
 
-      if (j < 0 || j >= ds.length) return ds;
+      if (
+        target < 0 ||
+        target >= previous.length
+      ) {
+        return previous;
+      }
 
-      const next = [...ds];
-      [next[i], next[j]] = [next[j], next[i]];
+      const next = [...previous];
+      [next[index], next[target]] = [
+        next[target],
+        next[index],
+      ];
 
       return next;
     });
+  };
 
   function removeIngredient(row: IngredientRow) {
-    const used = dishes.some((d) =>
-      d.recipe.some((r) => r.ingredient === row.key)
+    const used = dishes.some((dish) =>
+      dish.recipe.some(
+        (recipe) => recipe.ingredient === row.key,
+      ),
     );
 
     if (
@@ -160,38 +472,44 @@ export function MenuEditor({
       !window.confirm(
         fill(m.removeIngredientConfirm, {
           name: row.name || "?",
-        })
+        }),
       )
     ) {
       return;
     }
 
-    setIngredients((is) =>
-      is.filter((i) => i.key !== row.key)
+    setIngredients((previous) =>
+      previous.filter(
+        (ingredient) => ingredient.key !== row.key,
+      ),
     );
 
-    setDishes((ds) =>
-      ds.map((d) => ({
-        ...d,
-        recipe: d.recipe.filter(
-          (r) => r.ingredient !== row.key
+    setDishes((previous) =>
+      previous.map((dish) => ({
+        ...dish,
+        recipe: dish.recipe.filter(
+          (recipe) => recipe.ingredient !== row.key,
         ),
-      }))
+      })),
     );
   }
 
   function validate(): string | null {
-    if (!dishes.length) return m.errors.no_dishes;
+    if (!dishes.length) {
+      return m.errors.no_dishes;
+    }
 
     if (
-      ingredients.some((i) => !i.name.trim()) ||
-      dishes.some((d) => !d.nameEs.trim())
+      ingredients.some(
+        (ingredient) => !ingredient.name.trim(),
+      ) ||
+      dishes.some((dish) => !dish.nameEs.trim())
     ) {
       return m.errors.empty_name;
     }
 
-    const names = ingredients.map((i) =>
-      i.name.trim().toLowerCase()
+    const names = ingredients.map((ingredient) =>
+      ingredient.name.trim().toLowerCase(),
     );
 
     if (new Set(names).size !== names.length) {
@@ -199,10 +517,12 @@ export function MenuEditor({
     }
 
     if (
-      dishes.some((d) =>
-        d.recipe.some(
-          (r) => r.ingredient && !(Number(r.qty) > 0)
-        )
+      dishes.some((dish) =>
+        dish.recipe.some(
+          (recipe) =>
+            recipe.ingredient &&
+            !(Number(recipe.qty) > 0),
+        ),
       )
     ) {
       return m.errors.bad_qty;
@@ -215,7 +535,8 @@ export function MenuEditor({
     const problem = validate();
 
     if (problem) {
-      return setNote({ ok: false, text: problem });
+      setNote({ ok: false, text: problem });
+      return;
     }
 
     setBusy(true);
@@ -224,32 +545,38 @@ export function MenuEditor({
     const body = {
       action: "saveMenu",
 
-      ingredients: ingredients.map((i) => ({
-        key: i.key,
-        name: i.name.trim(),
-        unit: i.unit,
+      ingredients: ingredients.map((ingredient) => ({
+        key: ingredient.key,
+        name: ingredient.name.trim(),
+        unit: ingredient.unit,
       })),
 
-      dishes: dishes.map((d) => ({
-        id: d.id,
-        nameEs: d.nameEs.trim(),
-        nameEn: d.nameEn.trim(),
+      dishes: dishes.map((dish) => ({
+        id: dish.id,
+        nameEs: dish.nameEs.trim(),
+        nameEn: dish.nameEn.trim(),
+
+        // La URL se guarda internamente.
+        // El dueño nunca necesita escribirla.
+        imageUrl: dish.imageUrl,
+
         priceCents: Math.round(
-          Math.max(0, Number(d.price) || 0) * 100
+          Math.max(0, Number(dish.price) || 0) * 100,
         ),
+
         recipe: Object.entries(
-          d.recipe.reduce<Record<string, number>>(
-            (acc, r) => {
-              if (r.ingredient) {
-                acc[r.ingredient] =
-                  (acc[r.ingredient] ?? 0) +
-                  Number(r.qty);
+          dish.recipe.reduce<Record<string, number>>(
+            (acc, recipe) => {
+              if (recipe.ingredient) {
+                acc[recipe.ingredient] =
+                  (acc[recipe.ingredient] ?? 0) +
+                  Number(recipe.qty);
               }
 
               return acc;
             },
-            {}
-          )
+            {},
+          ),
         ).map(([ingredient, qty]) => ({
           ingredient,
           qty,
@@ -257,32 +584,48 @@ export function MenuEditor({
       })),
     };
 
-    const res = await fetch(
-      `/api/stalls/${initial.slug}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+    let response: Response | null = null;
+
+    try {
+      response = await fetch(
+        `/api/stalls/${initial.slug}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
         },
-        body: JSON.stringify(body),
-      }
-    ).catch(() => null);
+      );
+    } catch {
+      response = null;
+    }
 
     setBusy(false);
 
-    if (res?.status === 401) {
-      return window.location.reload();
+    if (response?.status === 401) {
+      window.location.reload();
+      return;
     }
 
-    const json = await res?.json().catch(() => null);
+    const json = await response
+      ?.json()
+      .catch(() => null);
 
-    if (!res?.ok) {
-      const key = (json?.error ?? "generic") as keyof typeof m.errors;
+    if (!response?.ok) {
+      const key = (json?.error ?? "generic") as
+        keyof typeof m.errors;
 
-      return setNote({
+      setNote({
         ok: false,
-        text: m.errors[key] ?? m.errors.generic,
+        text:
+          m.errors[key] ??
+          (es
+            ? "No se pudo guardar el menú."
+            : "Could not save the menu."),
       });
+
+      return;
     }
 
     const fresh = fromView(json as OwnerView);
@@ -299,9 +642,6 @@ export function MenuEditor({
 
   return (
     <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-4 pb-32 pt-6 sm:px-6 lg:px-8">
-
-      {/* ENCABEZADO */}
-
       <header className="flex flex-col gap-4 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Link
@@ -331,14 +671,9 @@ export function MenuEditor({
         </div>
       </header>
 
-      {/* DISTRIBUCIÓN PRINCIPAL */}
-
       <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-[minmax(260px,0.75fr)_minmax(0,1.7fr)]">
-
         {/* INGREDIENTES */}
-
         <section className="flex min-w-0 flex-col gap-4 rounded-2xl border border-line bg-surface p-4 shadow-sm sm:p-5">
-
           <div className="flex items-start justify-between gap-3 border-b border-line pb-4">
             <div>
               <div className="mb-2 flex items-center gap-2">
@@ -356,7 +691,7 @@ export function MenuEditor({
               </p>
             </div>
 
-            <span className="shrink-0 rounded-lg bg-background px-2 py-1 text-xs font-semibold text-muted">
+            <span className="rounded-lg bg-background px-2 py-1 text-xs font-semibold text-muted">
               {ingredients.length}
             </span>
           </div>
@@ -376,7 +711,7 @@ export function MenuEditor({
                     type="button"
                     onClick={() => removeIngredient(row)}
                     aria-label={m.removeIngredient}
-                    className="rounded-lg px-2 py-1 text-lg leading-none text-bad transition hover:bg-surface"
+                    className="rounded-lg px-2 py-1 text-lg text-bad hover:bg-surface"
                   >
                     ×
                   </button>
@@ -387,13 +722,16 @@ export function MenuEditor({
                   value={row.name}
                   placeholder={m.ingredientName}
                   aria-label={m.ingredientName}
-                  onChange={(e) =>
-                    setIngredients((is) =>
-                      is.map((i) =>
-                        i.key === row.key
-                          ? { ...i, name: e.target.value }
-                          : i
-                      )
+                  onChange={(event) =>
+                    setIngredients((previous) =>
+                      previous.map((ingredient) =>
+                        ingredient.key === row.key
+                          ? {
+                              ...ingredient,
+                              name: event.target.value,
+                            }
+                          : ingredient,
+                      ),
                     )
                   }
                 />
@@ -407,22 +745,24 @@ export function MenuEditor({
                     className={input}
                     value={row.unit}
                     aria-label={m.unit}
-                    onChange={(e) =>
-                      setIngredients((is) =>
-                        is.map((i) =>
-                          i.key === row.key
+                    onChange={(event) =>
+                      setIngredients((previous) =>
+                        previous.map((ingredient) =>
+                          ingredient.key === row.key
                             ? {
-                                ...i,
-                                unit: asUnit(e.target.value),
+                                ...ingredient,
+                                unit: asUnit(
+                                  event.target.value,
+                                ),
                               }
-                            : i
-                        )
+                            : ingredient,
+                        ),
                       )
                     }
                   >
-                    {UNITS.map((u) => (
-                      <option key={u} value={u}>
-                        {m.units[u]}
+                    {UNITS.map((unit) => (
+                      <option key={unit} value={unit}>
+                        {m.units[unit]}
                       </option>
                     ))}
                   </select>
@@ -434,8 +774,8 @@ export function MenuEditor({
           <button
             type="button"
             onClick={() =>
-              setIngredients((is) => [
-                ...is,
+              setIngredients((previous) => [
+                ...previous,
                 {
                   key: newKey(),
                   name: "",
@@ -450,9 +790,7 @@ export function MenuEditor({
         </section>
 
         {/* PLATILLOS */}
-
         <section className="flex min-w-0 flex-col gap-4">
-
           <div className="flex items-start justify-between gap-3 border-b border-line pb-4">
             <div>
               <div className="mb-2 flex items-center gap-2">
@@ -470,47 +808,43 @@ export function MenuEditor({
               </p>
             </div>
 
-            <span className="shrink-0 rounded-lg bg-surface px-2 py-1 text-xs font-semibold text-muted">
+            <span className="rounded-lg bg-surface px-2 py-1 text-xs font-semibold text-muted">
               {dishes.length}
             </span>
           </div>
 
-          {dishes.map((d, idx) => (
+          {dishes.map((dish, index) => (
             <article
-              key={d.rowKey}
+              key={dish.rowKey}
               className="flex min-w-0 flex-col gap-4 rounded-2xl border border-line bg-surface p-4 shadow-sm transition hover:shadow-md sm:p-5"
             >
-
-              {/* NOMBRE Y ORDEN */}
-
+              {/* NOMBRE */}
               <div className="flex min-w-0 items-start gap-3">
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-muted">
-                      {ui.dishNumber} {idx + 1}
-                    </span>
-                  </div>
+                  <span className="text-xs font-semibold text-muted">
+                    {ui.dishNumber} {index + 1}
+                  </span>
 
                   <input
                     className={`${input} font-semibold`}
-                    value={d.nameEs}
+                    value={dish.nameEs}
                     placeholder={m.dishNameEs}
                     aria-label={m.dishNameEs}
-                    onChange={(e) =>
-                      setDish(d.rowKey, {
-                        nameEs: e.target.value,
+                    onChange={(event) =>
+                      setDish(dish.rowKey, {
+                        nameEs: event.target.value,
                       })
                     }
                   />
 
                   <input
-                    className={`${input} text-sm`}
-                    value={d.nameEn}
+                    className={input}
+                    value={dish.nameEn}
                     placeholder={m.dishNameEn}
                     aria-label={m.dishNameEn}
-                    onChange={(e) =>
-                      setDish(d.rowKey, {
-                        nameEn: e.target.value,
+                    onChange={(event) =>
+                      setDish(dish.rowKey, {
+                        nameEn: event.target.value,
                       })
                     }
                   />
@@ -519,10 +853,10 @@ export function MenuEditor({
                 <div className="flex shrink-0 flex-col overflow-hidden rounded-xl border border-line">
                   <button
                     type="button"
-                    onClick={() => move(idx, -1)}
-                    disabled={idx === 0}
+                    onClick={() => move(index, -1)}
+                    disabled={index === 0}
                     aria-label={m.moveUp}
-                    className="px-3 py-1.5 text-lg transition hover:bg-background disabled:opacity-20"
+                    className="px-3 py-1.5 text-lg disabled:opacity-20"
                   >
                     ↑
                   </button>
@@ -531,18 +865,31 @@ export function MenuEditor({
 
                   <button
                     type="button"
-                    onClick={() => move(idx, 1)}
-                    disabled={idx === dishes.length - 1}
+                    onClick={() => move(index, 1)}
+                    disabled={
+                      index === dishes.length - 1
+                    }
                     aria-label={m.moveDown}
-                    className="px-3 py-1.5 text-lg transition hover:bg-background disabled:opacity-20"
+                    className="px-3 py-1.5 text-lg disabled:opacity-20"
                   >
                     ↓
                   </button>
                 </div>
               </div>
 
-              {/* PRECIO */}
+              {/* FOTO REAL */}
+              <PhotoEditor
+                slug={initial.slug}
+                lang={photoLang}
+                dish={dish}
+                onImageChange={(imageUrl) =>
+                  setDish(dish.rowKey, {
+                    imageUrl,
+                  })
+                }
+              />
 
+              {/* PRECIO */}
               <div className="rounded-xl bg-background p-3">
                 <label className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-muted">
@@ -556,10 +903,13 @@ export function MenuEditor({
                   <input
                     className={`${input} min-w-0 flex-1 text-right font-semibold tabular-nums`}
                     inputMode="decimal"
-                    value={d.price}
-                    onChange={(e) =>
-                      setDish(d.rowKey, {
-                        price: e.target.value.replace(/[^\d.]/g, ""),
+                    value={dish.price}
+                    onChange={(event) =>
+                      setDish(dish.rowKey, {
+                        price: event.target.value.replace(
+                          /[^\d.]/g,
+                          "",
+                        ),
                       })
                     }
                   />
@@ -571,9 +921,7 @@ export function MenuEditor({
               </div>
 
               {/* RECETA */}
-
               <div className="flex flex-col gap-3 border-t border-line pt-4">
-
                 <div>
                   <h3 className="text-sm font-bold">
                     {m.recipe}
@@ -584,25 +932,26 @@ export function MenuEditor({
                   </p>
                 </div>
 
-                {d.recipe.map((r, ri) => (
+                {dish.recipe.map((recipe, recipeIndex) => (
                   <div
-                    key={ri}
+                    key={recipeIndex}
                     className="grid min-w-0 grid-cols-[minmax(0,1fr)_76px_30px] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_100px_45px_32px]"
                   >
                     <select
-                      className={`${input} min-w-0`}
-                      value={r.ingredient}
+                      className={input}
+                      value={recipe.ingredient}
                       aria-label={m.chooseIngredient}
-                      onChange={(e) =>
-                        setRecipe(d.rowKey, (rs) =>
-                          rs.map((x, j) =>
-                            j === ri
+                      onChange={(event) =>
+                        setRecipe(dish.rowKey, (rows) =>
+                          rows.map((r, i) =>
+                            i === recipeIndex
                               ? {
-                                  ...x,
-                                  ingredient: e.target.value,
+                                  ...r,
+                                  ingredient:
+                                    event.target.value,
                                 }
-                              : x
-                          )
+                              : r,
+                          ),
                         )
                       }
                     >
@@ -612,68 +961,82 @@ export function MenuEditor({
 
                       {ingredients
                         .filter((i) => i.name.trim())
-                        .map((i) => (
-                          <option key={i.key} value={i.key}>
-                            {i.name}
+                        .map((ingredient) => (
+                          <option
+                            key={ingredient.key}
+                            value={ingredient.key}
+                          >
+                            {ingredient.name}
                           </option>
                         ))}
                     </select>
 
                     <input
-                      className="w-full min-w-0 rounded-xl border border-line bg-background px-2 py-2.5 text-right text-sm tabular-nums outline-none focus:border-brand"
+                      className={`${input} text-right`}
                       inputMode="decimal"
-                      value={r.qty}
+                      value={recipe.qty}
                       aria-label={m.qty}
-                      onChange={(e) =>
-                        setRecipe(d.rowKey, (rs) =>
-                          rs.map((x, j) =>
-                            j === ri
+                      onChange={(event) =>
+                        setRecipe(dish.rowKey, (rows) =>
+                          rows.map((r, i) =>
+                            i === recipeIndex
                               ? {
-                                  ...x,
-                                  qty: e.target.value.replace(/[^\d.]/g, ""),
+                                  ...r,
+                                  qty:
+                                    event.target.value.replace(
+                                      /[^\d.]/g,
+                                      "",
+                                    ),
                                 }
-                              : x
-                          )
+                              : r,
+                          ),
                         )
                       }
                     />
 
                     <span className="text-center text-xs text-muted">
-                      {unitOf.get(r.ingredient) ?? ""}
+                      {unitOf.get(recipe.ingredient) ??
+                        ""}
                     </span>
 
                     <button
                       type="button"
                       onClick={() =>
-                        setRecipe(d.rowKey, (rs) =>
-                          rs.filter((_, j) => j !== ri)
+                        setRecipe(dish.rowKey, (rows) =>
+                          rows.filter(
+                            (_, i) => i !== recipeIndex,
+                          ),
                         )
                       }
                       aria-label={m.removeFromRecipe}
-                      className="rounded-lg px-1 py-1 text-xl text-bad transition hover:bg-background"
+                      className="rounded-lg px-1 py-1 text-xl text-bad"
                     >
                       ×
                     </button>
                   </div>
                 ))}
 
-                {!d.recipe.some((r) => r.ingredient) && (
+                {!dish.recipe.some(
+                  (recipe) => recipe.ingredient,
+                ) && (
                   <p className="rounded-lg bg-background p-3 text-xs font-semibold text-warn">
                     {m.recipeEmpty}
                   </p>
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-
                   <button
                     type="button"
                     onClick={() =>
-                      setRecipe(d.rowKey, (rs) => [
-                        ...rs,
-                        { ingredient: "", qty: "" },
+                      setRecipe(dish.rowKey, (rows) => [
+                        ...rows,
+                        {
+                          ingredient: "",
+                          qty: "",
+                        },
                       ])
                     }
-                    className="rounded-full border border-line px-3 py-2 text-sm font-semibold transition hover:bg-background"
+                    className="rounded-full border border-line px-3 py-2 text-sm font-semibold hover:bg-background"
                   >
                     {m.addToRecipe}
                   </button>
@@ -684,14 +1047,16 @@ export function MenuEditor({
                       if (
                         window.confirm(
                           fill(m.removeDishConfirm, {
-                            name: d.nameEs || m.newDish,
-                          })
+                            name:
+                              dish.nameEs || m.newDish,
+                          }),
                         )
                       ) {
-                        setDishes((ds) =>
-                          ds.filter(
-                            (x) => x.rowKey !== d.rowKey
-                          )
+                        setDishes((previous) =>
+                          previous.filter(
+                            (item) =>
+                              item.rowKey !== dish.rowKey,
+                          ),
                         );
                       }
                     }}
@@ -704,18 +1069,17 @@ export function MenuEditor({
             </article>
           ))}
 
-          {/* AGREGAR PLATILLO */}
-
           <button
             type="button"
             onClick={() =>
-              setDishes((ds) => [
-                ...ds,
+              setDishes((previous) => [
+                ...previous,
                 {
                   rowKey: newKey(),
                   id: null,
                   nameEs: "",
                   nameEn: "",
+                  imageUrl: null,
                   price: "",
                   recipe: [
                     { ingredient: "", qty: "" },
@@ -723,18 +1087,16 @@ export function MenuEditor({
                 },
               ])
             }
-            className="w-full rounded-xl border border-dashed border-brand px-4 py-4 text-sm font-semibold text-brand transition hover:bg-surface"
+            className="w-full rounded-xl border border-dashed border-brand px-4 py-4 text-sm font-semibold text-brand hover:bg-surface"
           >
             {m.addDish}
           </button>
         </section>
       </div>
 
-      {/* BARRA INFERIOR DE GUARDADO */}
-
+      {/* BARRA PARA GUARDAR */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2 sm:px-2 lg:flex-row lg:items-center lg:justify-end">
-
+        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2 lg:flex-row lg:items-center lg:justify-end">
           {note ? (
             <p
               className={`text-center text-sm font-semibold lg:mr-auto ${
@@ -755,7 +1117,7 @@ export function MenuEditor({
             type="button"
             onClick={save}
             disabled={busy || !dirty}
-            className="w-full rounded-xl bg-brand px-8 py-3 text-base font-bold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto lg:min-w-64"
+            className="w-full rounded-xl bg-brand px-8 py-3 text-base font-bold text-white shadow-sm disabled:opacity-50 lg:w-auto lg:min-w-64"
           >
             {busy ? m.saving : m.save}
           </button>

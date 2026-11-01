@@ -4,19 +4,32 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { Dictionary } from "@/dictionaries";
-import { clock, fill, minutesSince, money } from "@/lib/format";
-import type { PublicSnapshot } from "@/lib/stall";
-import { AgentChat } from "./AgentChat";
-import { NotifyButton, forgetWatch } from "./NotifyButton";
 
-/** Shown after PayPal sends the customer back. */
+import type { Dictionary } from "@/dictionaries";
+import {
+  clock,
+  fill,
+  minutesSince,
+  money,
+} from "@/lib/format";
+import type { PublicSnapshot } from "@/lib/stall";
+
+import { AgentChat } from "./AgentChat";
+import {
+  NotifyButton,
+  forgetWatch,
+} from "./NotifyButton";
+
 export type Confirmation =
-  | { kind: "reserved"; name: string; pickupBy: string; totalCents: number }
+  | {
+      kind: "reserved";
+      name: string;
+      pickupBy: string;
+      totalCents: number;
+    }
   | { kind: "cancelled" }
   | { kind: "error" };
 
-/** The customer's stamp card. */
 export type StampCardInfo = {
   have: number | null;
   perReward: number;
@@ -26,10 +39,6 @@ export type StampCardInfo = {
 const POLL_MS = 5_000;
 const FEW = 5;
 
-/**
- * Maps the demo dishes to their local photographs.
- * This does not require database changes.
- */
 function normalize(text: string): string {
   return text
     .toLowerCase()
@@ -37,14 +46,19 @@ function normalize(text: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function getDishImage(
+// Fotografías originales de demostración.
+// Se utilizan solo cuando no hay foto del dueño.
+function getDemoDishImage(
   nameEs: string,
   nameEn: string,
 ): string | null {
   const es = normalize(nameEs);
   const en = normalize(nameEn);
 
-  if (es.includes("quesabirria") || en.includes("quesabirria")) {
+  if (
+    es.includes("quesabirria") ||
+    en.includes("quesabirria")
+  ) {
     return "/menu/quesabirria.jpg";
   }
 
@@ -55,15 +69,90 @@ function getDishImage(
     return "/menu/plato-birria.jpg";
   }
 
-  if (es.includes("consome") || en.includes("consome")) {
+  if (
+    es.includes("consome") ||
+    en.includes("consome")
+  ) {
     return "/menu/consome.jpg";
   }
 
-  if (es.includes("taco") || en.includes("taco")) {
+  if (
+    es.includes("taco") ||
+    en.includes("taco")
+  ) {
     return "/menu/tacos.jpg";
   }
 
   return null;
+}
+
+function DishImage({
+  imageUrl,
+  fallback,
+  alt,
+  out,
+}: {
+  imageUrl: string | null;
+  fallback: string | null;
+  alt: string;
+  out: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  const customImage =
+    imageUrl && !failed ? imageUrl : null;
+
+  if (customImage) {
+    return (
+      // Las fotos externas y de Supabase se muestran
+      // sin requerir dominios en next.config.
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        key={customImage}
+        src={customImage}
+        alt={alt}
+        className={`h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+          out ? "grayscale" : ""
+        }`}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  if (fallback) {
+    return (
+      <Image
+        src={fallback}
+        alt={alt}
+        fill
+        sizes="(min-width: 1024px) 22vw, (min-width: 640px) 42vw, 100vw"
+        className={`object-cover transition-transform duration-300 group-hover:scale-105 ${
+          out ? "grayscale" : ""
+        }`}
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-[200px] items-center justify-center bg-brand/10 text-brand">
+      <svg
+        width="44"
+        height="44"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M4 3v7a3 3 0 0 0 6 0V3" />
+        <path d="M7 3v18" />
+        <path d="M20 3c-3 3-4 6-4 10h4V3Z" />
+        <path d="M20 13v8" />
+      </svg>
+    </div>
+  );
 }
 
 export function PublicStall({
@@ -88,22 +177,22 @@ export function PublicStall({
 
   const es = lang === "es";
 
-  // Keep availability synchronized with the business.
+  // Mantener disponibilidad e imágenes actualizadas.
   useEffect(() => {
     let alive = true;
 
     const tick = async () => {
       try {
-        const res = await fetch(
+        const response = await fetch(
           `/api/stalls/${initial.slug}`,
           { cache: "no-store" },
         );
 
-        if (res.ok && alive) {
-          setSnap(await res.json());
+        if (response.ok && alive) {
+          setSnap(await response.json());
         }
       } catch {
-        // Keep displaying the last valid snapshot.
+        // Mantener los últimos datos válidos.
       }
 
       if (alive) {
@@ -119,7 +208,6 @@ export function PublicStall({
     };
   }, [initial.slug]);
 
-  // A notification that already fired may be requested again.
   useEffect(() => {
     if (!snap.isOpen) return;
 
@@ -146,19 +234,11 @@ export function PublicStall({
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-8 pb-10">
-
-      {/* =========================
-          BUSINESS HERO
-      ========================= */}
+      {/* ENCABEZADO DEL NEGOCIO */}
       <header className="overflow-hidden rounded-[2rem] border border-line bg-surface shadow-sm">
         <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
-
-          {/* Branding and information */}
           <div className="flex min-w-0 flex-col justify-center gap-5 px-6 py-8 sm:px-8 sm:py-10 lg:px-10">
-
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-
-              {/* Restaurant logo */}
               <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-3xl border border-line bg-[#fff9ed] shadow-sm sm:h-36 sm:w-36">
                 <Image
                   src="/logo-birria-dona-lupe.png"
@@ -204,7 +284,6 @@ export function PublicStall({
                       : "bg-bad"
                   }`}
                 />
-
                 {snap.isOpen ? t.open : t.closed}
               </span>
 
@@ -220,7 +299,11 @@ export function PublicStall({
                   strokeLinejoin="round"
                   aria-hidden="true"
                 >
-                  <circle cx="12" cy="12" r="9" />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="9"
+                  />
                   <path d="M12 7v5l3 2" />
                 </svg>
 
@@ -231,7 +314,7 @@ export function PublicStall({
             </div>
           </div>
 
-          {/* Hero photograph */}
+          {/* Imagen principal existente */}
           <div className="relative min-h-[240px] overflow-hidden bg-[#f4e5d5] sm:min-h-[320px] lg:min-h-[380px]">
             <Image
               src="/menu/plato-birria.jpg"
@@ -251,9 +334,7 @@ export function PublicStall({
         </div>
       </header>
 
-      {/* =========================
-          RESERVATION CONFIRMATION
-      ========================= */}
+      {/* CONFIRMACIÓN DE APARTADO */}
       {confirmation && (
         <div
           role="status"
@@ -302,9 +383,7 @@ export function PublicStall({
         </div>
       )}
 
-      {/* =========================
-          MENU
-      ========================= */}
+      {/* MENÚ PÚBLICO */}
       <section className="flex min-w-0 flex-col gap-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -387,7 +466,7 @@ export function PublicStall({
                 ? dish.nameEs
                 : dish.nameEn;
 
-              const image = getDishImage(
+              const fallback = getDemoDishImage(
                 dish.nameEs,
                 dish.nameEn,
               );
@@ -400,42 +479,17 @@ export function PublicStall({
                   }`}
                 >
                   <div className="flex h-full flex-col sm:flex-row">
-
-                    {/* Dish photo */}
+                    {/* Foto real o de demostración */}
                     <div className="relative h-56 shrink-0 overflow-hidden bg-[#f2e5d8] sm:h-auto sm:w-[42%]">
-                      {image ? (
-                        <Image
-                          src={image}
-                          alt={dishName}
-                          fill
-                          sizes="(min-width: 1024px) 22vw, (min-width: 640px) 42vw, 100vw"
-                          className={`object-cover transition-transform duration-300 group-hover:scale-105 ${
-                            out ? "grayscale" : ""
-                          }`}
-                        />
-                      ) : (
-                        <div className="flex h-full min-h-[200px] items-center justify-center bg-brand/10 text-brand">
-                          <svg
-                            width="44"
-                            height="44"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M4 3v7a3 3 0 0 0 6 0V3" />
-                            <path d="M7 3v18" />
-                            <path d="M20 3c-3 3-4 6-4 10h4V3Z" />
-                            <path d="M20 13v8" />
-                          </svg>
-                        </div>
-                      )}
+                      <DishImage
+                        key={`${dish.id}-${dish.imageUrl ?? ""}`}
+                        imageUrl={dish.imageUrl}
+                        fallback={fallback}
+                        alt={dishName}
+                        out={out}
+                      />
                     </div>
 
-                    {/* Dish information */}
                     <div className="flex min-w-0 flex-1 flex-col justify-between gap-5 p-5 sm:p-6">
                       <div>
                         <span
@@ -509,9 +563,7 @@ export function PublicStall({
         )}
       </section>
 
-      {/* =========================
-          ORDER ASSISTANT
-      ========================= */}
+      {/* ASISTENTE DE RESERVAS */}
       <section className="min-w-0 space-y-4">
         <div>
           <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-brand">
@@ -545,9 +597,7 @@ export function PublicStall({
         </div>
       </section>
 
-      {/* =========================
-          LOYALTY / STAMP CARD
-      ========================= */}
+      {/* RECOMPENSAS */}
       {stampCard && (
         <section className="min-w-0 space-y-4">
           <div>
@@ -572,7 +622,6 @@ export function PublicStall({
         </section>
       )}
 
-      {/* FOOTER */}
       <footer className="border-t border-line pt-6 text-center">
         <p className="text-xs text-muted">
           {t.madeWith}
@@ -596,10 +645,12 @@ function StampCard({
   const [phone, setPhone] = useState("");
   const [bad, setBad] = useState(false);
 
-  async function lookUp(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function lookUp(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
 
-    const res = await fetch(
+    const response = await fetch(
       `/api/stalls/${slug}/card`,
       {
         method: "POST",
@@ -610,7 +661,7 @@ function StampCard({
       },
     ).catch(() => null);
 
-    if (res?.ok) {
+    if (response?.ok) {
       location.reload();
     } else {
       setBad(true);
@@ -629,9 +680,7 @@ function StampCard({
   return (
     <section
       className={`flex flex-col gap-5 rounded-[1.75rem] border border-line p-5 shadow-sm sm:p-7 ${
-        ready
-          ? "bg-warn-soft"
-          : "bg-surface"
+        ready ? "bg-warn-soft" : "bg-surface"
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -650,18 +699,18 @@ function StampCard({
       >
         {Array.from(
           { length: card.perReward },
-          (_, i) => (
+          (_, index) => (
             <li
-              key={i}
+              key={index}
               className={`flex aspect-square items-center justify-center rounded-full border-2 text-lg font-bold transition-colors ${
-                i < have
+                index < have
                   ? "border-brand bg-brand text-white"
                   : "border-dashed border-line text-muted"
               }`}
             >
-              {i < have
+              {index < have
                 ? "★"
-                : i === card.perReward - 1
+                : index === card.perReward - 1
                   ? "🎁"
                   : ""}
             </li>
@@ -705,9 +754,9 @@ function StampCard({
             <input
               id="stamp-phone"
               value={phone}
-              onChange={(e) => {
+              onChange={(event) => {
                 setPhone(
-                  e.target.value.replace(
+                  event.target.value.replace(
                     /[^\d +()-]/g,
                     "",
                   ),

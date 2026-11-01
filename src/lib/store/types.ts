@@ -33,6 +33,7 @@ export type MenuInput = {
     id: string | null;
     nameEs: string;
     nameEn: string;
+    imageUrl: string | null;
     priceCents: number;
     recipe: { ingredient: string; qty: number }[];
   }[];

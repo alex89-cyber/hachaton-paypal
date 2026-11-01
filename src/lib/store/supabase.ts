@@ -1,23 +1,69 @@
-import "server-only";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { DEMO_OPENED_MINUTES_AGO, demoDbIds, demoIngredients, demoSeedSales } from "../demo-data";
-import type { Dish, Ingredient } from "../inventory";
-import { cashUp, type PaymentMethod, type Reservation, type ReservationStatus, type Sale, type StallState } from "../stall";
-import type { RedeemResult, ReserveResult, SaleResult, StallStore, Watch } from "./types";
 
-// Supabase-backed store. Runs on the server with the secret key; stock moves go
-// through the SQL functions in supabase/migrations so they stay atomic.
+import "server-only";
+
+import {
+  createClient,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
+
+import {
+  DEMO_OPENED_MINUTES_AGO,
+  demoDbIds,
+  demoIngredients,
+  demoSeedSales,
+} from "../demo-data";
+
+import type { Dish, Ingredient } from "../inventory";
+
+import {
+  cashUp,
+  type PaymentMethod,
+  type Reservation,
+  type ReservationStatus,
+  type Sale,
+  type StallState,
+} from "../stall";
+
+import type {
+  RedeemResult,
+  ReserveResult,
+  SaleResult,
+  StallStore,
+  Watch,
+} from "./types";
+
+// Supabase-backed store.
+// Runs on the server using the service role key.
+// Stock changes use SQL functions to remain atomic.
 
 let client: SupabaseClient | null = null;
 
 function db(): SupabaseClient {
-  return (client ??= createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  }));
+  return (client ??= createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  ));
 }
 
-function check<T>(r: { data: T; error: { message: string } | null }, what: string): T {
-  if (r.error) throw new Error(`Supabase ${what}: ${r.error.message}`);
+function check<T>(
+  r: {
+    data: T;
+    error: { message: string } | null;
+  },
+  what: string
+): T {
+  if (r.error) {
+    throw new Error(
+      `Supabase ${what}: ${r.error.message}`
+    );
+  }
+
   return r.data;
 }
 
@@ -44,13 +90,18 @@ type ReservationRow = {
   paypal_order_id: string | null;
   paypal_authorization_id: string | null;
   payer_id: string | null;
-  reservation_items: { dish_id: string; qty: number }[];
+  reservation_items: {
+    dish_id: string;
+    qty: number;
+  }[];
 };
 
 const RESERVATION_COLS =
   "id, customer_name, total_cents, status, pickup_by, created_at, paypal_order_id, paypal_authorization_id, payer_id, reservation_items(dish_id, qty)";
 
-const toReservation = (r: ReservationRow): Reservation => ({
+const toReservation = (
+  r: ReservationRow
+): Reservation => ({
   id: r.id,
   customerName: r.customer_name,
   totalCents: r.total_cents,
@@ -58,119 +109,276 @@ const toReservation = (r: ReservationRow): Reservation => ({
   pickupBy: new Date(r.pickup_by).toISOString(),
   createdAt: new Date(r.created_at).toISOString(),
   paypalOrderId: r.paypal_order_id,
-  paypalAuthorizationId: r.paypal_authorization_id,
+  paypalAuthorizationId:
+    r.paypal_authorization_id,
   payerId: r.payer_id,
-  lines: r.reservation_items.map((l) => ({ dishId: l.dish_id, qty: l.qty })),
+  lines: r.reservation_items.map((line) => ({
+    dishId: line.dish_id,
+    qty: line.qty,
+  })),
 });
 
-/** Maps the stock functions' errors to the reasons the screens understand. */
-function stockError(error: { message: string; details?: string }): { reason: "closed" | "short"; short: string[] } | null {
-  if (error.message.includes("closed")) return { reason: "closed", short: [] };
-  if (error.message.includes("insufficient_stock")) {
-    const detail = error.details ?? "";
-    return { reason: "short", short: detail && detail !== "sold_out" ? detail.split(",") : [] };
+function stockError(error: {
+  message: string;
+  details?: string;
+}):
+  | {
+      reason: "closed" | "short";
+      short: string[];
+    }
+  | null {
+  if (error.message.includes("closed")) {
+    return {
+      reason: "closed",
+      short: [],
+    };
   }
+
+  if (
+    error.message.includes("insufficient_stock")
+  ) {
+    const detail = error.details ?? "";
+
+    return {
+      reason: "short",
+      short:
+        detail && detail !== "sold_out"
+          ? detail.split(",")
+          : [],
+    };
+  }
+
   return null;
 }
 
-async function businessBySlug(slug: string): Promise<BusinessRow | null> {
-  return check(await db().from("businesses").select("*").eq("slug", slug).maybeSingle(), "business");
+async function businessBySlug(
+  slug: string
+): Promise<BusinessRow | null> {
+  return check(
+    await db()
+      .from("businesses")
+      .select("*")
+      .eq("slug", slug)
+      .maybeSingle(),
+    "business"
+  );
 }
 
-/**
- * Leaves out archived dishes and ingredients (removed in the menu editor). Until
- * migration 0006 adds the column, the unfiltered query is used.
- */
-async function activeOnly<R extends { error: { message: string } | null }>(
+async function activeOnly<
+  R extends {
+    error: { message: string } | null;
+  },
+>(
   filtered: PromiseLike<R>,
-  all: () => PromiseLike<R>,
+  all: () => PromiseLike<R>
 ): Promise<R> {
-  const r = await filtered;
-  return r.error?.message.includes("archived") ? all() : r;
+  const result = await filtered;
+
+  return result.error?.message.includes("archived")
+    ? all()
+    : result;
 }
 
-async function load(b: BusinessRow): Promise<StallState> {
-  const recent = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const ingredientsQ = () => db().from("ingredients").select("id, name, unit, stock").eq("business_id", b.id).order("name");
+async function load(
+  b: BusinessRow
+): Promise<StallState> {
+  const recent = new Date(
+    Date.now() - 24 * 3600_000
+  ).toISOString();
+
+  const ingredientsQ = () =>
+    db()
+      .from("ingredients")
+      .select("id, name, unit, stock")
+      .eq("business_id", b.id)
+      .order("name");
+
   const dishesQ = () =>
     db()
       .from("dishes")
-      .select("id, name_es, name_en, price_cents, sold_out, sort, recipe_items(ingredient_id, qty)")
+      .select(
+        "id, name_es, name_en, image_url, price_cents, sold_out, sort, recipe_items(ingredient_id, qty)"
+      )
       .eq("business_id", b.id)
       .order("sort");
-  const [ingRes, dishRes, dayRes, resRes] = await Promise.all([
-    activeOnly(ingredientsQ().eq("archived", false), ingredientsQ),
-    activeOnly(dishesQ().eq("archived", false), dishesQ),
-    db()
-      .from("days")
-      .select("id, opened_at, opening_count")
-      .eq("business_id", b.id)
-      .order("opened_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    db().from("reservations").select(RESERVATION_COLS).eq("business_id", b.id).gte("created_at", recent).order("created_at"),
-  ]);
-  const reservations = ((check(resRes, "reservations") ?? []) as ReservationRow[]).map(toReservation);
-  const payers = [...new Set(reservations.flatMap((r) => (r.payerId ? [r.payerId] : [])))];
-  const stamps: Record<string, number> = Object.fromEntries(payers.map((p) => [p, 0]));
-  type CardRow = { payer_id: string; label: string | null; stamps: number; updated_at: string };
-  const [recentRes, payerRes] = await Promise.all([
-    db()
-      .from("stamp_cards")
-      .select("payer_id, label, stamps, updated_at")
-      .eq("business_id", b.id)
-      .order("updated_at", { ascending: false })
-      .limit(50),
-    payers.length
-      ? db().from("stamp_cards").select("payer_id, label, stamps, updated_at").eq("business_id", b.id).in("payer_id", payers)
-      : Promise.resolve({ data: [] as CardRow[], error: null }),
-  ]);
-  const recentCards = (check(recentRes, "stamp cards") ?? []) as CardRow[];
-  for (const c of [...recentCards, ...((check(payerRes, "stamp cards") ?? []) as CardRow[])]) {
-    if (c.payer_id in stamps) stamps[c.payer_id] = c.stamps;
+
+  const [ingRes, dishRes, dayRes, resRes] =
+    await Promise.all([
+      activeOnly(
+        ingredientsQ().eq("archived", false),
+        ingredientsQ
+      ),
+      activeOnly(
+        dishesQ().eq("archived", false),
+        dishesQ
+      ),
+      db()
+        .from("days")
+        .select("id, opened_at, opening_count")
+        .eq("business_id", b.id)
+        .order("opened_at", {
+          ascending: false,
+        })
+        .limit(1)
+        .maybeSingle(),
+      db()
+        .from("reservations")
+        .select(RESERVATION_COLS)
+        .eq("business_id", b.id)
+        .gte("created_at", recent)
+        .order("created_at"),
+    ]);
+
+  const reservations = (
+    (check(resRes, "reservations") ??
+      []) as ReservationRow[]
+  ).map(toReservation);
+
+  const payers = [
+    ...new Set(
+      reservations.flatMap((r) =>
+        r.payerId ? [r.payerId] : []
+      )
+    ),
+  ];
+
+  const stamps: Record<string, number> =
+    Object.fromEntries(
+      payers.map((payer) => [payer, 0])
+    );
+
+  type CardRow = {
+    payer_id: string;
+    label: string | null;
+    stamps: number;
+    updated_at: string;
+  };
+
+  const [recentRes, payerRes] =
+    await Promise.all([
+      db()
+        .from("stamp_cards")
+        .select(
+          "payer_id, label, stamps, updated_at"
+        )
+        .eq("business_id", b.id)
+        .order("updated_at", {
+          ascending: false,
+        })
+        .limit(50),
+
+      payers.length
+        ? db()
+            .from("stamp_cards")
+            .select(
+              "payer_id, label, stamps, updated_at"
+            )
+            .eq("business_id", b.id)
+            .in("payer_id", payers)
+        : Promise.resolve({
+            data: [] as CardRow[],
+            error: null,
+          }),
+    ]);
+
+  const recentCards = (
+    check(recentRes, "stamp cards") ?? []
+  ) as CardRow[];
+
+  const payerCards = (
+    check(payerRes, "stamp cards") ?? []
+  ) as CardRow[];
+
+  for (const card of [
+    ...recentCards,
+    ...payerCards,
+  ]) {
+    if (card.payer_id in stamps) {
+      stamps[card.payer_id] = card.stamps;
+    }
   }
-  const cards = recentCards.map((c) => ({
-    id: c.payer_id,
-    label: c.label,
-    stamps: c.stamps,
-    updatedAt: new Date(c.updated_at).toISOString(),
+
+  const cards = recentCards.map((card) => ({
+    id: card.payer_id,
+    label: card.label,
+    stamps: card.stamps,
+    updatedAt: new Date(
+      card.updated_at
+    ).toISOString(),
   }));
 
-  const ingredients: Ingredient[] = (check(ingRes, "ingredients") ?? []).map((i) => ({
-    id: i.id,
-    name: i.name,
-    unit: i.unit,
-    stock: Number(i.stock),
+  const ingredients: Ingredient[] = (
+    check(ingRes, "ingredients") ?? []
+  ).map((ingredient) => ({
+    id: ingredient.id,
+    name: ingredient.name,
+    unit: ingredient.unit,
+    stock: Number(ingredient.stock),
   }));
-  const dishes: Dish[] = (check(dishRes, "dishes") ?? []).map((d) => ({
-    id: d.id,
-    nameEs: d.name_es,
-    nameEn: d.name_en,
-    priceCents: d.price_cents,
-    soldOut: d.sold_out,
-    recipe: (d.recipe_items as { ingredient_id: string; qty: number }[]).map((r) => ({
-      ingredientId: r.ingredient_id,
-      qty: Number(r.qty),
+
+  // =========================================
+  // DISHES WITH IMAGES
+  // =========================================
+
+  const dishes: Dish[] = (
+    check(dishRes, "dishes") ?? []
+  ).map((dish) => ({
+    id: dish.id,
+    nameEs: dish.name_es,
+    nameEn: dish.name_en,
+
+    // The image is loaded from Supabase.
+    imageUrl: dish.image_url ?? null,
+
+    priceCents: dish.price_cents,
+    soldOut: dish.sold_out,
+    recipe: (
+      dish.recipe_items as {
+        ingredient_id: string;
+        qty: number;
+      }[]
+    ).map((recipe) => ({
+      ingredientId: recipe.ingredient_id,
+      qty: Number(recipe.qty),
     })),
   }));
-  const day = check(dayRes, "day") as { id: string; opened_at: string; opening_count: Record<string, number> } | null;
+
+  const day = check(dayRes, "day") as {
+    id: string;
+    opened_at: string;
+    opening_count: Record<string, number>;
+  } | null;
 
   let sales: Sale[] = [];
+
   if (day) {
     const rows = check(
       await db()
         .from("sales")
-        .select("id, method, total_cents, created_at, sale_items(dish_id, qty)")
+        .select(
+          "id, method, total_cents, created_at, sale_items(dish_id, qty)"
+        )
         .eq("day_id", day.id)
         .order("created_at"),
-      "sales",
+      "sales"
     );
-    sales = (rows ?? []).map((s) => ({
-      id: s.id,
-      method: s.method as PaymentMethod,
-      totalCents: s.total_cents,
-      at: new Date(s.created_at).toISOString(),
-      lines: (s.sale_items as { dish_id: string; qty: number }[]).map((l) => ({ dishId: l.dish_id, qty: l.qty })),
+
+    sales = (rows ?? []).map((sale) => ({
+      id: sale.id,
+      method: sale.method as PaymentMethod,
+      totalCents: sale.total_cents,
+      at: new Date(
+        sale.created_at
+      ).toISOString(),
+      lines: (
+        sale.sale_items as {
+          dish_id: string;
+          qty: number;
+        }[]
+      ).map((line) => ({
+        dishId: line.dish_id,
+        qty: line.qty,
+      })),
     }));
   }
 
@@ -180,50 +388,89 @@ async function load(b: BusinessRow): Promise<StallState> {
     currency: b.currency,
     timezone: b.timezone,
     isOpen: b.is_open,
-    openedAt: day?.opened_at ? new Date(day.opened_at).toISOString() : null,
-    updatedAt: new Date(b.updated_at).toISOString(),
+    openedAt: day?.opened_at
+      ? new Date(day.opened_at).toISOString()
+      : null,
+    updatedAt: new Date(
+      b.updated_at
+    ).toISOString(),
     dishes,
     ingredients,
-    openingCount: Object.fromEntries(Object.entries(day?.opening_count ?? {}).map(([k, v]) => [k, Number(v)])),
+    openingCount: Object.fromEntries(
+      Object.entries(
+        day?.opening_count ?? {}
+      ).map(([key, value]) => [
+        key,
+        Number(value),
+      ])
+    ),
     sales,
     holdMinutes: b.hold_minutes,
     reservations,
-    loyalty: { stampsPerReward: b.stamps_per_reward, rewardDishId: b.reward_dish_id, stamps, cards },
+    loyalty: {
+      stampsPerReward: b.stamps_per_reward,
+      rewardDishId: b.reward_dish_id,
+      stamps,
+      cards,
+    },
   };
 }
 
-async function must(slug: string): Promise<BusinessRow> {
-  const b = await businessBySlug(slug);
-  if (!b) throw new Error(`Unknown stall ${slug}`);
-  return b;
+async function must(
+  slug: string
+): Promise<BusinessRow> {
+  const business = await businessBySlug(slug);
+
+  if (!business) {
+    throw new Error(`Unknown stall ${slug}`);
+  }
+
+  return business;
 }
 
-const toDbLines = (lines: { dishId: string; qty: number }[]) => lines.map((l) => ({ dish_id: l.dishId, qty: l.qty }));
+const toDbLines = (
+  lines: {
+    dishId: string;
+    qty: number;
+  }[]
+) =>
+  lines.map((line) => ({
+    dish_id: line.dishId,
+    qty: line.qty,
+  }));
 
 export const supabaseStore: StallStore = {
   async get(slug) {
-    const b = await businessBySlug(slug);
-    return b ? load(b) : null;
+    const business = await businessBySlug(slug);
+    return business
+      ? load(business)
+      : null;
   },
 
   async open(slug, counts) {
-    const b = await must(slug);
-    check(await db().rpc("open_day", { p_business: b.id, p_counts: counts }), "open_day");
+    const business = await must(slug);
+
+    check(
+      await db().rpc("open_day", {
+        p_business: business.id,
+        p_counts: counts,
+      }),
+      "open_day"
+    );
+
     return load(await must(slug));
   },
 
-  
+  // =========================================
+  // HISTORICAL CASH-UP
+  // =========================================
 
   async close(slug) {
     const business = await must(slug);
 
-    // Consultar el estado antes de cerrar
     const before = await load(business);
-
-    // Calcular el corte
     const summary = cashUp(before);
 
-    // Guardar los resultados históricos
     const snapshot = {
       version: 1,
       savedAt: new Date().toISOString(),
@@ -233,17 +480,21 @@ export const supabaseStore: StallStore = {
       openingCount: before.openingCount,
     };
 
-    // Cerrar la jornada y guardar el corte
     const dayId = check(
-      await db().rpc("close_day_with_snapshot", {
-        p_business: business.id,
-        p_snapshot: snapshot,
-      }),
-      "close_day_with_snapshot",
+      await db().rpc(
+        "close_day_with_snapshot",
+        {
+          p_business: business.id,
+          p_snapshot: snapshot,
+        }
+      ),
+      "close_day_with_snapshot"
     ) as string;
 
     if (!dayId) {
-      throw new Error("No se pudo guardar el cierre");
+      throw new Error(
+        "No se pudo guardar el cierre"
+      );
     }
 
     return {
@@ -252,204 +503,610 @@ export const supabaseStore: StallStore = {
     };
   },
 
+  async recordSale(
+    slug,
+    lines,
+    method
+  ): Promise<SaleResult> {
+    const business = await must(slug);
 
+    const result = await db().rpc(
+      "record_sale",
+      {
+        p_business: business.id,
+        p_lines: toDbLines(lines),
+        p_method: method,
+      }
+    );
 
-  async recordSale(slug, lines, method): Promise<SaleResult> {
-    const b = await must(slug);
-    const r = await db().rpc("record_sale", { p_business: b.id, p_lines: toDbLines(lines), p_method: method });
-    if (r.error) {
-      const e = stockError(r.error);
-      if (e) return { ok: false, ...e };
-      throw new Error(`Supabase record_sale: ${r.error.message}`);
+    if (result.error) {
+      const error = stockError(result.error);
+
+      if (error) {
+        return {
+          ok: false,
+          ...error,
+        };
+      }
+
+      throw new Error(
+        `Supabase record_sale: ${result.error.message}`
+      );
     }
-    return { ok: true, state: await load(await must(slug)) };
+
+    return {
+      ok: true,
+      state: await load(await must(slug)),
+    };
   },
 
-  async setSoldOut(slug, dishId, soldOut) {
-    const b = await must(slug);
-    check(await db().from("dishes").update({ sold_out: soldOut }).eq("id", dishId).eq("business_id", b.id), "sold_out");
-    check(await db().from("businesses").update({ updated_at: new Date().toISOString() }).eq("id", b.id), "touch");
+  async setSoldOut(
+    slug,
+    dishId,
+    soldOut
+  ) {
+    const business = await must(slug);
+
+    check(
+      await db()
+        .from("dishes")
+        .update({
+          sold_out: soldOut,
+        })
+        .eq("id", dishId)
+        .eq("business_id", business.id),
+      "sold_out"
+    );
+
+    check(
+      await db()
+        .from("businesses")
+        .update({
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("id", business.id),
+      "touch"
+    );
+
     return load(await must(slug));
   },
 
   async restock(slug, adds) {
-    const b = await must(slug);
-    const r = await db().rpc("restock", { p_business: b.id, p_adds: adds });
-    if (r.error) {
-      if (r.error.message.includes("closed")) return { ok: false, reason: "closed" };
-      throw new Error(`Supabase restock: ${r.error.message}`);
+    const business = await must(slug);
+
+    const result = await db().rpc(
+      "restock",
+      {
+        p_business: business.id,
+        p_adds: adds,
+      }
+    );
+
+    if (result.error) {
+      if (
+        result.error.message.includes("closed")
+      ) {
+        return {
+          ok: false,
+          reason: "closed",
+        };
+      }
+
+      throw new Error(
+        `Supabase restock: ${result.error.message}`
+      );
     }
-    return { ok: true, state: await load(await must(slug)) };
+
+    return {
+      ok: true,
+      state: await load(await must(slug)),
+    };
   },
 
+  // =========================================
+  // SAVE MENU WITH IMAGE URL
+  // =========================================
+
   async saveMenu(slug, menu) {
-    const b = await must(slug);
-    const r = await db().rpc("save_menu", {
-      p_business: b.id,
-      p_ingredients: menu.ingredients,
-      p_dishes: menu.dishes.map((d) => ({
-        id: d.id,
-        name_es: d.nameEs,
-        name_en: d.nameEn,
-        price_cents: d.priceCents,
-        recipe: d.recipe,
-      })),
-    });
-    if (r.error) throw new Error(`Supabase save_menu: ${r.error.message}`);
+    const business = await must(slug);
+
+    const result = await db().rpc(
+      "save_menu",
+      {
+        p_business: business.id,
+
+        p_ingredients: menu.ingredients,
+
+        p_dishes: menu.dishes.map(
+          (dish) => ({
+            id: dish.id,
+            name_es: dish.nameEs,
+            name_en: dish.nameEn,
+
+            // NEW: save the image URL.
+            image_url:
+              dish.imageUrl?.trim() || null,
+
+            price_cents: dish.priceCents,
+            recipe: dish.recipe,
+          })
+        ),
+      }
+    );
+
+    if (result.error) {
+      throw new Error(
+        `Supabase save_menu: ${result.error.message}`
+      );
+    }
+
     return load(await must(slug));
   },
 
+  // =========================================
+  // DEMO RESET
+  // =========================================
+
   async reset(slug) {
-    const b = await must(slug);
-    if (b.id !== demoDbIds.business) return load(b);
+    const business = await must(slug);
 
-    // Back to the morning of the demo: full stock, opened, then the seeded sales
-    // with their timestamps moved into the past so the forecast has a pace.
-    check(await db().from("sales").delete().eq("business_id", b.id), "clear sales");
-    check(await db().from("reservations").delete().eq("business_id", b.id), "clear reservations");
-    check(await db().from("days").delete().eq("business_id", b.id), "clear days");
-    const counts = Object.fromEntries(demoIngredients.map((i) => [demoDbIds.ingredients[i.id], i.stock]));
-    check(await db().rpc("open_day", { p_business: b.id, p_counts: counts }), "open_day");
-
-    const now = Date.now();
-    for (const seed of demoSeedSales()) {
-      const lines = [{ dish_id: demoDbIds.dishes[seed.dishId], qty: seed.qty }];
-      const saleId = check(
-        await db().rpc("record_sale", { p_business: b.id, p_lines: lines, p_method: seed.method }),
-        "seed sale",
-      ) as string;
-      check(
-        await db()
-          .from("sales")
-          .update({ created_at: new Date(now - seed.minutesAgo * 60_000).toISOString() })
-          .eq("id", saleId),
-        "seed time",
-      );
+    if (
+      business.id !== demoDbIds.business
+    ) {
+      return load(business);
     }
+
+    check(
+      await db()
+        .from("sales")
+        .delete()
+        .eq("business_id", business.id),
+      "clear sales"
+    );
+
+    check(
+      await db()
+        .from("reservations")
+        .delete()
+        .eq("business_id", business.id),
+      "clear reservations"
+    );
+
     check(
       await db()
         .from("days")
-        .update({ opened_at: new Date(now - DEMO_OPENED_MINUTES_AGO * 60_000).toISOString() })
-        .eq("business_id", b.id)
-        .is("closed_at", null),
-      "seed day",
+        .delete()
+        .eq("business_id", business.id),
+      "clear days"
     );
+
+    const counts = Object.fromEntries(
+      demoIngredients.map(
+        (ingredient) => [
+          demoDbIds.ingredients[
+            ingredient.id
+          ],
+          ingredient.stock,
+        ]
+      )
+    );
+
+    check(
+      await db().rpc("open_day", {
+        p_business: business.id,
+        p_counts: counts,
+      }),
+      "open_day"
+    );
+
+    const now = Date.now();
+
+    for (const seed of demoSeedSales()) {
+      const lines = [
+        {
+          dish_id:
+            demoDbIds.dishes[
+              seed.dishId
+            ],
+          qty: seed.qty,
+        },
+      ];
+
+      const saleId = check(
+        await db().rpc(
+          "record_sale",
+          {
+            p_business: business.id,
+            p_lines: lines,
+            p_method: seed.method,
+          }
+        ),
+        "seed sale"
+      ) as string;
+
+      check(
+        await db()
+          .from("sales")
+          .update({
+            created_at: new Date(
+              now -
+                seed.minutesAgo *
+                  60_000
+            ).toISOString(),
+          })
+          .eq("id", saleId),
+        "seed time"
+      );
+    }
+
+    check(
+      await db()
+        .from("days")
+        .update({
+          opened_at: new Date(
+            now -
+              DEMO_OPENED_MINUTES_AGO *
+                60_000
+          ).toISOString(),
+        })
+        .eq(
+          "business_id",
+          business.id
+        )
+        .is("closed_at", null),
+      "seed day"
+    );
+
     return load(await must(slug));
   },
 
-  async reserve(slug, customerName, lines, pickupBy): Promise<ReserveResult> {
-    const b = await must(slug);
-    const r = await db().rpc("reserve", {
-      p_business: b.id,
-      p_customer: customerName,
-      p_lines: toDbLines(lines),
-      p_pickup_by: pickupBy.toISOString(),
-    });
-    if (r.error) {
-      const e = stockError(r.error);
-      if (e) return { ok: false, ...e };
-      throw new Error(`Supabase reserve: ${r.error.message}`);
+  // =========================================
+  // RESERVATIONS
+  // =========================================
+
+  async reserve(
+    slug,
+    customerName,
+    lines,
+    pickupBy
+  ): Promise<ReserveResult> {
+    const business = await must(slug);
+
+    const result = await db().rpc(
+      "reserve",
+      {
+        p_business: business.id,
+        p_customer: customerName,
+        p_lines: toDbLines(lines),
+        p_pickup_by:
+          pickupBy.toISOString(),
+      }
+    );
+
+    if (result.error) {
+      const error = stockError(result.error);
+
+      if (error) {
+        return {
+          ok: false,
+          ...error,
+        };
+      }
+
+      throw new Error(
+        `Supabase reserve: ${result.error.message}`
+      );
     }
-    const created = await this.getReservation(slug, r.data as string);
-    if (!created) throw new Error("Supabase reserve: reservation not found after insert");
-    return { ok: true, reservation: created };
+
+    const created =
+      await this.getReservation(
+        slug,
+        result.data as string
+      );
+
+    if (!created) {
+      throw new Error(
+        "Supabase reserve: reservation not found after insert"
+      );
+    }
+
+    return {
+      ok: true,
+      reservation: created,
+    };
   },
 
   async getReservation(slug, id) {
-    const b = await must(slug);
+    const business = await must(slug);
+
     const row = check(
-      await db().from("reservations").select(RESERVATION_COLS).eq("id", id).eq("business_id", b.id).maybeSingle(),
-      "reservation",
+      await db()
+        .from("reservations")
+        .select(RESERVATION_COLS)
+        .eq("id", id)
+        .eq(
+          "business_id",
+          business.id
+        )
+        .maybeSingle(),
+      "reservation"
     ) as ReservationRow | null;
-    return row ? toReservation(row) : null;
+
+    return row
+      ? toReservation(row)
+      : null;
   },
 
-  async setPayPalOrder(slug, id, orderId) {
-    const b = await must(slug);
+  async setPayPalOrder(
+    slug,
+    id,
+    orderId
+  ) {
+    const business = await must(slug);
+
     check(
-      await db().from("reservations").update({ paypal_order_id: orderId }).eq("id", id).eq("business_id", b.id),
-      "set order",
+      await db()
+        .from("reservations")
+        .update({
+          paypal_order_id: orderId,
+        })
+        .eq("id", id)
+        .eq(
+          "business_id",
+          business.id
+        ),
+      "set order"
     );
   },
 
-  async markAuthorized(slug, id, authorizationId, payerId) {
-    const b = await must(slug);
+  async markAuthorized(
+    slug,
+    id,
+    authorizationId,
+    payerId
+  ) {
+    const business = await must(slug);
+
     check(
       await db()
         .from("reservations")
         .update({
           status: "authorized",
-          paypal_authorization_id: authorizationId,
+          paypal_authorization_id:
+            authorizationId,
           payer_id: payerId,
-          updated_at: new Date().toISOString(),
+          updated_at:
+            new Date().toISOString(),
         })
         .eq("id", id)
-        .eq("business_id", b.id)
+        .eq(
+          "business_id",
+          business.id
+        )
         .eq("status", "held"),
-      "authorize",
+      "authorize"
     );
-    check(await db().from("businesses").update({ updated_at: new Date().toISOString() }).eq("id", b.id), "touch");
+
+    check(
+      await db()
+        .from("businesses")
+        .update({
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("id", business.id),
+      "touch"
+    );
   },
 
-  async markDelivered(slug, id) {
+  async markDelivered(
+    slug,
+    id
+  ) {
     await must(slug);
-    const saleId = check(await db().rpc("deliver_reservation", { p_reservation: id }), "deliver");
+
+    const saleId = check(
+      await db().rpc(
+        "deliver_reservation",
+        {
+          p_reservation: id,
+        }
+      ),
+      "deliver"
+    );
+
     return saleId != null;
   },
 
-  async release(slug, id, status) {
+  async release(
+    slug,
+    id,
+    status
+  ) {
     await must(slug);
-    return Boolean(check(await db().rpc("release_reservation", { p_reservation: id, p_status: status }), "release"));
-  },
 
-  async stamps(slug, cardId) {
-    const b = await must(slug);
-    const card = check(
-      await db().from("stamp_cards").select("stamps").eq("business_id", b.id).eq("payer_id", cardId).maybeSingle(),
-      "stamp card",
-    ) as { stamps: number } | null;
-    return card?.stamps ?? 0;
-  },
-
-  async addStamp(slug, cardId, label) {
-    const b = await must(slug);
-    return check(await db().rpc("add_stamp", { p_business: b.id, p_card: cardId, p_label: label ?? "" }), "add_stamp") as number;
-  },
-
-  async redeem(slug, cardId): Promise<RedeemResult> {
-    const b = await must(slug);
-    const r = await db().rpc("redeem_reward", { p_business: b.id, p_payer: cardId });
-    if (r.error) {
-      if (r.error.message.includes("not_enough_stamps")) return { ok: false, reason: "not_enough" };
-      if (r.error.message.includes("no_reward")) return { ok: false, reason: "no_reward" };
-      const e = stockError(r.error);
-      if (e) return { ok: false, reason: e.reason };
-      throw new Error(`Supabase redeem_reward: ${r.error.message}`);
-    }
-    return { ok: true, stampsLeft: r.data as number };
-  },
-
-  async addWatch(slug, w) {
-    const b = await must(slug);
-    check(
-      await db().rpc("add_watch", {
-        p_business: b.id,
-        p_dish: w.dishId,
-        p_endpoint: w.endpoint,
-        p_p256dh: w.p256dh,
-        p_auth: w.auth,
-        p_lang: w.lang,
-      }),
-      "add_watch",
+    return Boolean(
+      check(
+        await db().rpc(
+          "release_reservation",
+          {
+            p_reservation: id,
+            p_status: status,
+          }
+        ),
+        "release"
+      )
     );
   },
 
-  async claimWatches(slug, open, dishIds): Promise<Watch[]> {
-    const b = await must(slug);
+  // =========================================
+  // LOYALTY AND STAMP CARDS
+  // =========================================
+
+  async stamps(
+    slug,
+    cardId
+  ) {
+    const business = await must(slug);
+
+    const card = check(
+      await db()
+        .from("stamp_cards")
+        .select("stamps")
+        .eq(
+          "business_id",
+          business.id
+        )
+        .eq("payer_id", cardId)
+        .maybeSingle(),
+      "stamp card"
+    ) as {
+      stamps: number;
+    } | null;
+
+    return card?.stamps ?? 0;
+  },
+
+  async addStamp(
+    slug,
+    cardId,
+    label
+  ) {
+    const business = await must(slug);
+
+    return check(
+      await db().rpc(
+        "add_stamp",
+        {
+          p_business: business.id,
+          p_card: cardId,
+          p_label: label ?? "",
+        }
+      ),
+      "add_stamp"
+    ) as number;
+  },
+
+  async redeem(
+    slug,
+    cardId
+  ): Promise<RedeemResult> {
+    const business = await must(slug);
+
+    const result = await db().rpc(
+      "redeem_reward",
+      {
+        p_business: business.id,
+        p_payer: cardId,
+      }
+    );
+
+    if (result.error) {
+      if (
+        result.error.message.includes(
+          "not_enough_stamps"
+        )
+      ) {
+        return {
+          ok: false,
+          reason: "not_enough",
+        };
+      }
+
+      if (
+        result.error.message.includes(
+          "no_reward"
+        )
+      ) {
+        return {
+          ok: false,
+          reason: "no_reward",
+        };
+      }
+
+      const error = stockError(
+        result.error
+      );
+
+      if (error) {
+        return {
+          ok: false,
+          reason: error.reason,
+        };
+      }
+
+      throw new Error(
+        `Supabase redeem_reward: ${result.error.message}`
+      );
+    }
+
+    return {
+      ok: true,
+      stampsLeft:
+        result.data as number,
+    };
+  },
+
+  // =========================================
+  // PUSH NOTIFICATIONS
+  // =========================================
+
+  async addWatch(
+    slug,
+    watch
+  ) {
+    const business = await must(slug);
+
+    check(
+      await db().rpc(
+        "add_watch",
+        {
+          p_business: business.id,
+          p_dish: watch.dishId,
+          p_endpoint: watch.endpoint,
+          p_p256dh: watch.p256dh,
+          p_auth: watch.auth,
+          p_lang: watch.lang,
+        }
+      ),
+      "add_watch"
+    );
+  },
+
+  async claimWatches(
+    slug,
+    open,
+    dishIds
+  ): Promise<Watch[]> {
+    const business = await must(slug);
+
     const rows = check(
-      await db().rpc("claim_watches", { p_business: b.id, p_open: open, p_dishes: dishIds }),
-      "claim_watches",
-    ) as { dish_id: string | null; endpoint: string; p256dh: string; auth: string; lang: "es" | "en" }[];
-    return (rows ?? []).map((w) => ({ dishId: w.dish_id, endpoint: w.endpoint, p256dh: w.p256dh, auth: w.auth, lang: w.lang }));
+      await db().rpc(
+        "claim_watches",
+        {
+          p_business: business.id,
+          p_open: open,
+          p_dishes: dishIds,
+        }
+      ),
+      "claim_watches"
+    ) as {
+      dish_id: string | null;
+      endpoint: string;
+      p256dh: string;
+      auth: string;
+      lang: "es" | "en";
+    }[];
+
+    return (rows ?? []).map(
+      (watch) => ({
+        dishId: watch.dish_id,
+        endpoint: watch.endpoint,
+        p256dh: watch.p256dh,
+        auth: watch.auth,
+        lang: watch.lang,
+      })
+    );
   },
 };

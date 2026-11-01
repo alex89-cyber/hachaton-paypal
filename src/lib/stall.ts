@@ -1,4 +1,5 @@
-// Stall state and the views derived from it. Pure: the stores load and save
+
+﻿// Stall state and the views derived from it. Pure: the stores load and save
 // StallState, everything shown on screen is computed here.
 
 import { forecast, type SaleEvent } from "./forecast";
@@ -94,6 +95,7 @@ export type PublicDish = {
   id: string;
   nameEs: string;
   nameEn: string;
+  imageUrl: string | null;
   priceCents: number;
   portions: number;
 };
@@ -120,6 +122,10 @@ export function publicSnapshot(s: StallState): PublicSnapshot {
       id: d.id,
       nameEs: d.nameEs,
       nameEn: d.nameEn,
+
+      // Keep old dishes without images compatible with PublicDish.
+      imageUrl: d.imageUrl ?? null,
+
       priceCents: d.priceCents,
       portions: s.isOpen ? (left.get(d.id) ?? 0) : 0,
     })),
@@ -177,6 +183,10 @@ export function ownerView(s: StallState, now = new Date()): OwnerView {
         id: d.id,
         nameEs: d.nameEs,
         nameEn: d.nameEn,
+
+        // Keep old dishes without images compatible with OwnerDish.
+        imageUrl: d.imageUrl ?? null,
+
         priceCents: d.priceCents,
         portions,
         recipe: d.recipe,

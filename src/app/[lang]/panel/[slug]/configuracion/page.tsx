@@ -2,13 +2,22 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type {
   CSSProperties,
+  ChangeEvent,
   FormEvent,
   ReactNode,
 } from "react";
+
+import { CameraCapture } from "@/components/CameraCapture";
 
 import type {
   OwnerView,
@@ -43,13 +52,19 @@ const DEFAULT_THEME: StallTheme = {
   roundedButtons: true,
 };
 
-const DEFAULT_HOURS: StallOpeningHour[] =
-  DAYS.map((_, day) => ({
+const DEFAULT_HOURS: StallOpeningHour[] = DAYS.map(
+  (_, day) => ({
     day,
     enabled: day !== 0,
     open: "09:00",
     close: "18:00",
-  }));
+  }),
+);
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_GALLERY_IMAGES = 20;
+
+type ImageKind = "logo" | "cover" | "gallery";
 
 function defaultSettings(): StallSettings {
   return {
@@ -93,12 +108,35 @@ function defaultSettings(): StallSettings {
   };
 }
 
+function mergeSettings(
+  saved?: StallSettings,
+): StallSettings {
+  const defaults = defaultSettings();
+
+  return {
+    ...defaults,
+    ...saved,
+    theme: {
+      ...defaults.theme,
+      ...saved?.theme,
+    },
+    openingHours: saved?.openingHours?.length
+      ? saved.openingHours
+      : defaults.openingHours,
+    galleryUrls: saved?.galleryUrls ?? [],
+  };
+}
+
 function isValidUrl(value: string): boolean {
   if (!value.trim()) return true;
 
   try {
     const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
+
+    return (
+      url.protocol === "https:" ||
+      url.protocol === "http:"
+    );
   } catch {
     return false;
   }
@@ -205,6 +243,7 @@ function ColorField({
         <span className="block text-sm font-semibold text-[#302018]">
           {label}
         </span>
+
         <span className="text-xs text-[#80695d]">
           {value}
         </span>
@@ -239,8 +278,164 @@ function SwitchField({
 }
 
 // ==========================================
+// SELECTOR DE IMÁGENES
+// ==========================================
+
+function ImageUploader({
+  title,
+  description,
+  kind,
+  lang,
+  disabled,
+  imageUrls,
+  onUpload,
+  onRemove,
+  onOpenCamera,
+}: {
+  title: string;
+  description: string;
+  kind: ImageKind;
+  lang: "es" | "en";
+  disabled: boolean;
+  imageUrls: string[];
+  onUpload: (file: File, kind: ImageKind) => Promise<void>;
+  onRemove: (index: number) => void;
+  onOpenCamera: (kind: ImageKind) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const es = lang === "es";
+
+  async function selected(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const files = Array.from(event.target.files ?? []);
+
+    event.target.value = "";
+
+    if (!files.length) return;
+
+    const chosen =
+      kind === "gallery" ? files : files.slice(0, 1);
+
+    for (const file of chosen) {
+      try {
+        await onUpload(file, kind);
+      } catch {
+        // El componente principal muestra el error.
+        break;
+      }
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#eaded3] bg-[#fffaf4] p-4 sm:p-5">
+      <h3 className="text-base font-bold text-[#302018]">
+        {title}
+      </h3>
+
+      <p className="mt-1 text-sm text-[#80695d]">
+        {description}
+      </p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {/* SUBIR DESDE EL DISPOSITIVO */}
+
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => fileRef.current?.click()}
+          className="flex items-center justify-center gap-2 rounded-xl border border-[#decbbb] bg-white px-4 py-3 text-sm font-bold text-[#4b3024] transition hover:border-[#a3341f] disabled:opacity-50"
+        >
+          <span aria-hidden="true">📁</span>
+          {es ? "Subir imagen" : "Upload image"}
+        </button>
+
+        {/* ABRIR LA CÁMARA REAL */}
+
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onOpenCamera(kind)}
+          className="flex items-center justify-center gap-2 rounded-xl border border-[#decbbb] bg-white px-4 py-3 text-sm font-bold text-[#4b3024] transition hover:border-[#a3341f] disabled:opacity-50"
+        >
+          <span aria-hidden="true">📷</span>
+          {es ? "Tomar foto" : "Take photo"}
+        </button>
+      </div>
+
+      {/* SOLO SELECCIÓN DE ARCHIVOS.
+          La cámara se controla con CameraCapture. */}
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple={kind === "gallery"}
+        onChange={(event) => void selected(event)}
+        className="hidden"
+        aria-label={
+          es ? "Seleccionar imagen" : "Select image"
+        }
+      />
+
+      {/* IMÁGENES CARGADAS */}
+
+      {imageUrls.length > 0 && (
+        <div
+          className={`mt-5 grid gap-3 ${
+            kind === "gallery"
+              ? "grid-cols-2 sm:grid-cols-3"
+              : "grid-cols-1"
+          }`}
+        >
+          {imageUrls.map((url, index) => (
+            <div
+              key={`${url}-${index}`}
+              className="overflow-hidden rounded-xl border border-[#eaded3] bg-white"
+            >
+              <div
+                className={
+                  kind === "cover"
+                    ? "h-40"
+                    : "aspect-square max-h-48"
+                }
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={url}
+                  alt={`${title} ${index + 1}`}
+                  className={
+                    kind === "logo"
+                      ? "h-full w-full object-contain p-2"
+                      : "h-full w-full object-cover"
+                  }
+                />
+              </div>
+
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onRemove(index)}
+                className="w-full border-t border-[#eaded3] px-3 py-2 text-sm font-semibold text-[#a3341f] hover:bg-red-50 disabled:opacity-50"
+              >
+                {es ? "Quitar imagen" : "Remove image"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="mt-3 text-xs text-[#80695d]">
+        {es
+          ? "Formatos: JPG, PNG o WEBP. Máximo 5 MB por fotografía."
+          : "Formats: JPG, PNG or WEBP. Maximum 5 MB per photo."}
+      </p>
+    </div>
+  );
+}
+
+// ==========================================
 // PÁGINA CON SUSPENSE
-// Corrige el error de Next.js con useParams.
 // ==========================================
 
 export default function BusinessConfigurationPage() {
@@ -269,12 +464,16 @@ function BusinessConfigurationContent() {
     slug: string;
   }>();
 
-  const lang = params.lang;
+  const lang: "es" | "en" =
+    params.lang === "en" ? "en" : "es";
+
   const slug = params.slug;
-  const es = lang !== "en";
+  const es = lang === "es";
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -282,11 +481,17 @@ function BusinessConfigurationContent() {
   const [settings, setSettings] =
     useState<StallSettings>(defaultSettings);
 
+  // NUEVO:
+  // null = cámara cerrada.
+  // logo / cover / gallery = cámara para esa sección.
+  const [cameraKind, setCameraKind] =
+    useState<ImageKind | null>(null);
+
   const panelHref = `/${lang}/panel/${slug}`;
   const publicHref = `/${lang}/${slug}`;
 
   // ========================================
-  // CARGAR DATOS DEL NEGOCIO
+  // CARGAR CONFIGURACIÓN
   // ========================================
 
   const loadData = useCallback(async () => {
@@ -300,32 +505,18 @@ function BusinessConfigurationContent() {
         throw new Error(
           response.status === 401
             ? es
-              ? "Debes iniciar sesión como dueño."
+              ? "Necesitas iniciar sesión como dueño."
               : "You must sign in as an owner."
             : es
               ? "No se pudo cargar la configuración."
-              : "Could not load business settings.",
+              : "Could not load settings.",
         );
       }
 
       const data = (await response.json()) as OwnerView;
-      const defaults = defaultSettings();
 
       setName(data.name);
-      setSettings({
-        ...defaults,
-        ...data.settings,
-        theme: {
-          ...defaults.theme,
-          ...data.settings?.theme,
-        },
-        openingHours:
-          data.settings?.openingHours?.length
-            ? data.settings.openingHours
-            : defaults.openingHours,
-        galleryUrls:
-          data.settings?.galleryUrls ?? [],
-      });
+      setSettings(mergeSettings(data.settings));
       setError("");
     } catch (err) {
       setError(
@@ -338,10 +529,6 @@ function BusinessConfigurationContent() {
     }
   }, [slug, es]);
 
-  // Ejecutar la carga de forma asíncrona.
-  // Evita actualizar el estado sincrónicamente
-  // dentro del cuerpo del efecto.
-
   useEffect(() => {
     const timeout = setTimeout(() => {
       void loadData();
@@ -351,7 +538,7 @@ function BusinessConfigurationContent() {
   }, [loadData]);
 
   // ========================================
-  // EDITAR CONFIGURACIÓN
+  // ACTUALIZAR CAMPOS
   // ========================================
 
   function update<K extends keyof StallSettings>(
@@ -359,6 +546,7 @@ function BusinessConfigurationContent() {
     value: StallSettings[K],
   ) {
     setNotice("");
+
     setSettings((current) => ({
       ...current,
       [key]: value,
@@ -370,6 +558,7 @@ function BusinessConfigurationContent() {
     value: StallTheme[K],
   ) {
     setNotice("");
+
     setSettings((current) => ({
       ...current,
       theme: {
@@ -397,11 +586,198 @@ function BusinessConfigurationContent() {
   }
 
   // ========================================
-  // GUARDAR EN SUPABASE / MEMORIA
+  // SUBIR IMÁGENES
   // ========================================
 
-  async function save(event: FormEvent<HTMLFormElement>) {
+  async function uploadImage(
+    file: File,
+    kind: ImageKind,
+  ): Promise<void> {
+    setError("");
+    setNotice("");
+
+    const fail = (message: string): never => {
+      setError(message);
+      throw new Error(message);
+    };
+
+    const acceptedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!acceptedTypes.includes(file.type)) {
+      fail(
+        es
+          ? "La imagen debe ser JPG, PNG o WEBP."
+          : "The image must be JPG, PNG or WEBP.",
+      );
+    }
+
+    if (file.size === 0 || file.size > MAX_IMAGE_BYTES) {
+      fail(
+        es
+          ? "La imagen debe pesar menos de 5 MB."
+          : "The image must be under 5 MB.",
+      );
+    }
+
+    if (
+      kind === "gallery" &&
+      (settings.galleryUrls?.length ?? 0) >=
+        MAX_GALLERY_IMAGES
+    ) {
+      fail(
+        es
+          ? "La galería permite máximo 20 imágenes."
+          : "The gallery allows up to 20 images.",
+      );
+    }
+
+    setUploading(true);
+
+    try {
+      const form = new FormData();
+
+      form.append("kind", kind);
+      form.append("file", file);
+
+      const response = await fetch(
+        `/api/stalls/${encodeURIComponent(slug)}/branding-image`,
+        {
+          method: "POST",
+          body: form,
+        },
+      );
+
+      const result = await response
+        .json()
+        .catch(() => null);
+
+      if (!response.ok || !result?.url) {
+        const message =
+          result?.error === "storage_not_configured"
+            ? es
+              ? "Supabase Storage no está configurado."
+              : "Supabase Storage is not configured."
+            : result?.error === "file_too_large"
+              ? es
+                ? "La fotografía supera los 5 MB."
+                : "The photo exceeds 5 MB."
+              : result?.error === "unsupported_image" ||
+                  result?.error === "invalid_image"
+                ? es
+                  ? "El formato de imagen no es compatible."
+                  : "Unsupported image format."
+                : response.status === 401
+                  ? es
+                    ? "Necesitas iniciar sesión como dueño."
+                    : "You must sign in as an owner."
+                  : es
+                    ? "No se pudo subir la fotografía."
+                    : "Could not upload the photograph.";
+
+        throw new Error(message);
+      }
+
+      const url: string = result.url;
+
+      if (kind === "logo") {
+        update("logoUrl", url);
+      } else if (kind === "cover") {
+        update("coverUrl", url);
+      } else {
+        setSettings((current) => ({
+          ...current,
+          galleryUrls: [
+            ...(current.galleryUrls ?? []),
+            url,
+          ].slice(0, MAX_GALLERY_IMAGES),
+        }));
+      }
+
+      setNotice(
+        es
+          ? "Imagen subida. Pulsa Guardar configuración para publicarla."
+          : "Image uploaded. Select Save settings to publish it.",
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : es
+            ? "Error al subir la imagen."
+            : "Image upload error.";
+
+      setError(message);
+
+      // IMPORTANTE:
+      // La cámara necesita recibir el error
+      // para no cerrarse cuando falle la subida.
+      throw err;
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // ========================================
+  // ABRIR Y CERRAR CÁMARA
+  // ========================================
+
+  function openCamera(kind: ImageKind) {
+    if (uploading || saving) return;
+
+    setError("");
+    setNotice("");
+
+    if (
+      kind === "gallery" &&
+      (settings.galleryUrls?.length ?? 0) >=
+        MAX_GALLERY_IMAGES
+    ) {
+      setError(
+        es
+          ? "La galería ya tiene 20 fotografías."
+          : "The gallery already has 20 photos.",
+      );
+      return;
+    }
+
+    // El componente CameraCapture se monta
+    // únicamente después de este clic.
+    // Ahí el navegador solicitará el permiso.
+    setCameraKind(kind);
+  }
+
+  function removeImage(
+    kind: ImageKind,
+    index: number,
+  ) {
+    if (kind === "logo") {
+      update("logoUrl", null);
+    } else if (kind === "cover") {
+      update("coverUrl", null);
+    } else {
+      update(
+        "galleryUrls",
+        (settings.galleryUrls ?? []).filter(
+          (_, i) => i !== index,
+        ),
+      );
+    }
+  }
+
+  // ========================================
+  // GUARDAR CONFIGURACIÓN
+  // ========================================
+
+  async function save(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
+
+    if (uploading || saving || cameraKind) return;
 
     setError("");
     setNotice("");
@@ -409,13 +785,13 @@ function BusinessConfigurationContent() {
     if (!name.trim()) {
       setError(
         es
-          ? "Escribe el nombre de tu negocio."
-          : "Enter your business name.",
+          ? "Escribe el nombre del negocio."
+          : "Enter the business name.",
       );
       return;
     }
 
-    const allUrls = [
+    const urls = [
       settings.logoUrl ?? "",
       settings.coverUrl ?? "",
       settings.googleMapsUrl ?? "",
@@ -426,20 +802,23 @@ function BusinessConfigurationContent() {
       ...(settings.galleryUrls ?? []),
     ];
 
-    if (allUrls.some((value) => !isValidUrl(value))) {
+    if (urls.some((url) => !isValidUrl(url))) {
       setError(
         es
-          ? "Revisa los enlaces. Deben comenzar con https:// o http://."
-          : "Links must begin with https:// or http://.",
+          ? "Revisa los enlaces de contacto y las imágenes."
+          : "Check contact links and images.",
       );
       return;
     }
 
-    if ((settings.galleryUrls?.length ?? 0) > 20) {
+    if (
+      (settings.galleryUrls?.length ?? 0) >
+      MAX_GALLERY_IMAGES
+    ) {
       setError(
         es
-          ? "Puedes agregar máximo 20 fotografías."
-          : "You can add up to 20 photos.",
+          ? "La galería permite máximo 20 imágenes."
+          : "The gallery allows up to 20 images.",
       );
       return;
     }
@@ -467,34 +846,21 @@ function BusinessConfigurationContent() {
         .catch(() => null);
 
       if (!response.ok) {
-        const message =
+        throw new Error(
           result?.error === "settings_not_supported"
-            ? "El almacenamiento aún no tiene saveSettings."
+            ? "El almacenamiento no tiene saveSettings."
             : result?.error === "bad_request"
-              ? "Algún campo tiene un formato no permitido."
+              ? "Algún campo tiene un formato incorrecto."
               : response.status === 401
                 ? "Necesitas iniciar sesión."
-                : "No se pudo guardar la configuración.";
-
-        throw new Error(message);
+                : "No se pudo guardar la configuración.",
+        );
       }
 
       const updated = result as OwnerView;
-      const defaults = defaultSettings();
 
       setName(updated.name);
-      setSettings({
-        ...defaults,
-        ...updated.settings,
-        theme: {
-          ...defaults.theme,
-          ...updated.settings?.theme,
-        },
-        openingHours:
-          updated.settings?.openingHours?.length
-            ? updated.settings.openingHours
-            : defaults.openingHours,
-      });
+      setSettings(mergeSettings(updated.settings));
 
       setNotice(
         es
@@ -505,7 +871,7 @@ function BusinessConfigurationContent() {
       setError(
         err instanceof Error
           ? err.message
-          : "Error de conexión",
+          : "Error al guardar.",
       );
     } finally {
       setSaving(false);
@@ -513,7 +879,7 @@ function BusinessConfigurationContent() {
   }
 
   // ========================================
-  // DATOS PARA LA VISTA PREVIA
+  // VISTA PREVIA
   // ========================================
 
   const theme = {
@@ -552,18 +918,11 @@ function BusinessConfigurationContent() {
       ? "/menu/plato-birria.jpg"
       : "";
 
-  const logoPreview =
-    isValidUrl(settings.logoUrl ?? "")
-      ? settings.logoUrl || demoLogo
-      : demoLogo;
-
-  const coverPreview =
-    isValidUrl(settings.coverUrl ?? "")
-      ? settings.coverUrl || demoCover
-      : demoCover;
+  const logoPreview = settings.logoUrl || demoLogo;
+  const coverPreview = settings.coverUrl || demoCover;
 
   // ========================================
-  // ESTADO DE CARGA Y ERROR
+  // CARGANDO
   // ========================================
 
   if (loading) {
@@ -596,7 +955,9 @@ function BusinessConfigurationContent() {
             href={panelHref}
             className="mt-5 inline-block font-semibold text-[#a3341f] underline"
           >
-            {es ? "Volver al panel" : "Back to dashboard"}
+            {es
+              ? "Volver al panel"
+              : "Back to dashboard"}
           </Link>
         </div>
       </main>
@@ -604,7 +965,7 @@ function BusinessConfigurationContent() {
   }
 
   // ========================================
-  // FORMULARIO PRINCIPAL
+  // PÁGINA PRINCIPAL
   // ========================================
 
   return (
@@ -635,8 +996,8 @@ function BusinessConfigurationContent() {
 
             <p className="mt-2 text-sm text-[#80695d]">
               {es
-                ? "Personaliza la página que ven tus clientes."
-                : "Customize your customer-facing page."}
+                ? "Personaliza tu página pública con fotografías, colores e información de tu negocio."
+                : "Customize your public page with photos, colors and business details."}
             </p>
           </div>
 
@@ -645,7 +1006,9 @@ function BusinessConfigurationContent() {
             target="_blank"
             className="rounded-xl border border-[#eaded3] bg-white px-5 py-3 text-sm font-bold text-[#4b3024] shadow-sm"
           >
-            {es ? "Ver página pública ↗" : "View public page ↗"}
+            {es
+              ? "Ver página pública ↗"
+              : "View public page ↗"}
           </Link>
         </div>
       </header>
@@ -655,11 +1018,14 @@ function BusinessConfigurationContent() {
         className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-8 xl:grid-cols-[minmax(0,1fr)_380px]"
       >
         <div className="flex min-w-0 flex-col gap-6">
-
-          {/* IDENTIDAD */}
+          {/* ==================================
+              IDENTIDAD
+          ================================== */}
 
           <Section
-            title={es ? "Identidad del negocio" : "Business identity"}
+            title={
+              es ? "Identidad del negocio" : "Business identity"
+            }
             description={
               es
                 ? "Edita el nombre y los textos que verá el cliente."
@@ -668,7 +1034,9 @@ function BusinessConfigurationContent() {
           >
             <div className="grid gap-5">
               <Field
-                label={es ? "Nombre del negocio" : "Business name"}
+                label={
+                  es ? "Nombre del negocio" : "Business name"
+                }
                 value={name}
                 maxLength={120}
                 onChange={(v) => {
@@ -690,7 +1058,6 @@ function BusinessConfigurationContent() {
                 value={settings.taglineEn ?? ""}
                 maxLength={180}
                 onChange={(v) => update("taglineEn", v)}
-                placeholder="Homestyle tradition and flavor"
               />
 
               <Field
@@ -714,7 +1081,9 @@ function BusinessConfigurationContent() {
                 value={settings.welcomeMessageEs ?? ""}
                 maxLength={500}
                 multiline
-                onChange={(v) => update("welcomeMessageEs", v)}
+                onChange={(v) =>
+                  update("welcomeMessageEs", v)
+                }
               />
 
               <Field
@@ -722,68 +1091,127 @@ function BusinessConfigurationContent() {
                 value={settings.welcomeMessageEn ?? ""}
                 maxLength={500}
                 multiline
-                onChange={(v) => update("welcomeMessageEn", v)}
+                onChange={(v) =>
+                  update("welcomeMessageEn", v)
+                }
               />
             </div>
           </Section>
 
-          {/* FOTOGRAFÍAS */}
+          {/* ==================================
+              LOGO Y FOTOGRAFÍAS
+          ================================== */}
 
           <Section
-            title={es ? "Logo y fotografías" : "Logo and photos"}
+            title={
+              es ? "Logo y fotografías" : "Logo and photos"
+            }
             description={
               es
-                ? "En esta etapa puedes pegar enlaces de imágenes. La carga directa desde tu dispositivo se agregará después."
-                : "For now, use image URLs. Direct file uploads will be added next."
+                ? "Sube imágenes desde tu computadora o teléfono, o utiliza la cámara. No necesitas pegar enlaces."
+                : "Upload images from your computer or phone, or use your camera. No URLs needed."
             }
           >
-            <div className="grid gap-5">
-              <Field
-                label="URL del logo"
-                value={settings.logoUrl ?? ""}
-                maxLength={2048}
-                placeholder="https://..."
-                onChange={(v) => update("logoUrl", v || null)}
+            <div className="space-y-5">
+              <ImageUploader
+                title={
+                  es ? "Logo del negocio" : "Business logo"
+                }
+                description={
+                  es
+                    ? "Sube una imagen cuadrada de tu logo."
+                    : "Upload a square image of your logo."
+                }
+                kind="logo"
+                lang={lang}
+                disabled={uploading || saving}
+                imageUrls={
+                  settings.logoUrl
+                    ? [settings.logoUrl]
+                    : []
+                }
+                onUpload={uploadImage}
+                onRemove={(index) =>
+                  removeImage("logo", index)
+                }
+                onOpenCamera={openCamera}
               />
 
-              <Field
-                label="URL de la portada"
-                value={settings.coverUrl ?? ""}
-                maxLength={2048}
-                placeholder="https://..."
-                onChange={(v) => update("coverUrl", v || null)}
+              <ImageUploader
+                title={
+                  es
+                    ? "Fotografía de portada"
+                    : "Cover photo"
+                }
+                description={
+                  es
+                    ? "Elige la foto principal que verán tus clientes."
+                    : "Choose the main photo customers will see."
+                }
+                kind="cover"
+                lang={lang}
+                disabled={uploading || saving}
+                imageUrls={
+                  settings.coverUrl
+                    ? [settings.coverUrl]
+                    : []
+                }
+                onUpload={uploadImage}
+                onRemove={(index) =>
+                  removeImage("cover", index)
+                }
+                onOpenCamera={openCamera}
               />
 
-              <label className="block">
-                <span className="text-sm font-semibold text-[#4b3024]">
+              <ImageUploader
+                title={
+                  es
+                    ? "Galería de fotografías"
+                    : "Photo gallery"
+                }
+                description={
+                  es
+                    ? "Agrega hasta 20 fotografías de tus platillos, negocio o instalaciones."
+                    : "Add up to 20 photos of your food, business or premises."
+                }
+                kind="gallery"
+                lang={lang}
+                disabled={uploading || saving}
+                imageUrls={settings.galleryUrls ?? []}
+                onUpload={uploadImage}
+                onRemove={(index) =>
+                  removeImage("gallery", index)
+                }
+                onOpenCamera={openCamera}
+              />
+
+              {uploading && (
+                <div
+                  role="status"
+                  className="rounded-xl bg-[#fff3df] px-4 py-3 text-sm font-semibold text-[#8a4a20]"
+                >
                   {es
-                    ? "Galería (una URL por línea)"
-                    : "Gallery (one URL per line)"}
-                </span>
+                    ? "Subiendo fotografía a Supabase..."
+                    : "Uploading photo to Supabase..."}
+                </div>
+              )}
 
-                <textarea
-                  rows={5}
-                  value={(settings.galleryUrls ?? []).join("\n")}
-                  onChange={(e) =>
-                    update(
-                      "galleryUrls",
-                      e.target.value
-                        .split("\n")
-                        .map((v) => v.trim())
-                        .filter(Boolean),
-                    )
-                  }
-                  placeholder={"https://...\nhttps://..."}
-                  className="mt-2 w-full rounded-xl border border-[#e7d8ca] bg-white px-4 py-3 text-sm outline-none focus:border-[#a3341f]"
-                />
-              </label>
+              <p className="text-xs leading-relaxed text-[#80695d]">
+                {es
+                  ? "Las imágenes se envían a Supabase al seleccionarlas o al confirmar una fotografía de la cámara. No aparecerán en tu página pública hasta que guardes la configuración. Quitar una foto del formulario no borra el archivo almacenado."
+                  : "Images upload to Supabase when selected or confirmed from the camera. They do not appear on your public page until you save settings. Removing a photo here does not delete the stored file."}
+              </p>
             </div>
           </Section>
 
-          {/* COLORES Y DISEÑO */}
+          {/* ==================================
+              DISEÑO Y COLORES
+          ================================== */}
 
           <Section
-            title={es ? "Diseño y colores" : "Design and colors"}
+            title={
+              es ? "Diseño y colores" : "Design and colors"
+            }
             description={
               es
                 ? "Elige los colores y el estilo visual de tu negocio."
@@ -792,33 +1220,47 @@ function BusinessConfigurationContent() {
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <ColorField
-                label={es ? "Color principal" : "Primary color"}
+                label={
+                  es ? "Color principal" : "Primary color"
+                }
                 value={theme.primaryColor!}
-                onChange={(v) => updateTheme("primaryColor", v)}
+                onChange={(v) =>
+                  updateTheme("primaryColor", v)
+                }
               />
 
               <ColorField
-                label={es ? "Color secundario" : "Secondary color"}
+                label={
+                  es ? "Color secundario" : "Secondary color"
+                }
                 value={theme.secondaryColor!}
-                onChange={(v) => updateTheme("secondaryColor", v)}
+                onChange={(v) =>
+                  updateTheme("secondaryColor", v)
+                }
               />
 
               <ColorField
                 label={es ? "Fondo" : "Background"}
                 value={theme.backgroundColor!}
-                onChange={(v) => updateTheme("backgroundColor", v)}
+                onChange={(v) =>
+                  updateTheme("backgroundColor", v)
+                }
               />
 
               <ColorField
                 label={es ? "Texto" : "Text"}
                 value={theme.textColor!}
-                onChange={(v) => updateTheme("textColor", v)}
+                onChange={(v) =>
+                  updateTheme("textColor", v)
+                }
               />
 
               <ColorField
                 label={es ? "Botones" : "Buttons"}
                 value={theme.buttonColor!}
-                onChange={(v) => updateTheme("buttonColor", v)}
+                onChange={(v) =>
+                  updateTheme("buttonColor", v)
+                }
               />
             </div>
 
@@ -873,20 +1315,34 @@ function BusinessConfigurationContent() {
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <SwitchField
-                label={es ? "Tarjetas redondeadas" : "Rounded cards"}
+                label={
+                  es
+                    ? "Tarjetas redondeadas"
+                    : "Rounded cards"
+                }
                 checked={theme.roundedCards !== false}
-                onChange={(v) => updateTheme("roundedCards", v)}
+                onChange={(v) =>
+                  updateTheme("roundedCards", v)
+                }
               />
 
               <SwitchField
-                label={es ? "Botones redondeados" : "Rounded buttons"}
+                label={
+                  es
+                    ? "Botones redondeados"
+                    : "Rounded buttons"
+                }
                 checked={theme.roundedButtons !== false}
-                onChange={(v) => updateTheme("roundedButtons", v)}
+                onChange={(v) =>
+                  updateTheme("roundedButtons", v)
+                }
               />
             </div>
           </Section>
 
-          {/* UBICACIÓN */}
+          {/* ==================================
+              UBICACIÓN
+          ================================== */}
 
           <Section title={es ? "Ubicación" : "Location"}>
             <div className="grid gap-5 sm:grid-cols-2">
@@ -914,10 +1370,14 @@ function BusinessConfigurationContent() {
               />
 
               <Field
-                label={es ? "Código postal" : "Postal code"}
+                label={
+                  es ? "Código postal" : "Postal code"
+                }
                 value={settings.postalCode ?? ""}
                 maxLength={20}
-                onChange={(v) => update("postalCode", v)}
+                onChange={(v) =>
+                  update("postalCode", v)
+                }
               />
 
               <Field
@@ -932,14 +1392,18 @@ function BusinessConfigurationContent() {
                   label="Enlace de Google Maps"
                   value={settings.googleMapsUrl ?? ""}
                   maxLength={2048}
+                  onChange={(v) =>
+                    update("googleMapsUrl", v)
+                  }
                   placeholder="https://maps.google.com/..."
-                  onChange={(v) => update("googleMapsUrl", v)}
                 />
               </div>
             </div>
           </Section>
 
-          {/* CONTACTO */}
+          {/* ==================================
+              CONTACTO
+          ================================== */}
 
           <Section
             title={
@@ -964,7 +1428,9 @@ function BusinessConfigurationContent() {
               />
 
               <Field
-                label={es ? "Correo electrónico" : "Email"}
+                label={
+                  es ? "Correo electrónico" : "Email"
+                }
                 value={settings.email ?? ""}
                 type="email"
                 maxLength={254}
@@ -975,23 +1441,24 @@ function BusinessConfigurationContent() {
                 label="Instagram"
                 value={settings.instagram ?? ""}
                 maxLength={2048}
-                placeholder="https://instagram.com/..."
-                onChange={(v) => update("instagram", v)}
+                onChange={(v) =>
+                  update("instagram", v)
+                }
               />
 
               <Field
                 label="Facebook"
                 value={settings.facebook ?? ""}
                 maxLength={2048}
-                placeholder="https://facebook.com/..."
-                onChange={(v) => update("facebook", v)}
+                onChange={(v) =>
+                  update("facebook", v)
+                }
               />
 
               <Field
                 label="TikTok"
                 value={settings.tiktok ?? ""}
                 maxLength={2048}
-                placeholder="https://tiktok.com/@..."
                 onChange={(v) => update("tiktok", v)}
               />
 
@@ -1000,14 +1467,17 @@ function BusinessConfigurationContent() {
                   label={es ? "Sitio web" : "Website"}
                   value={settings.website ?? ""}
                   maxLength={2048}
-                  placeholder="https://..."
-                  onChange={(v) => update("website", v)}
+                  onChange={(v) =>
+                    update("website", v)
+                  }
                 />
               </div>
             </div>
           </Section>
 
-          {/* HORARIOS */}
+          {/* ==================================
+              HORARIOS DE ATENCIÓN
+          ================================== */}
 
           <Section
             title={
@@ -1074,7 +1544,9 @@ function BusinessConfigurationContent() {
             </div>
           </Section>
 
-          {/* VISIBILIDAD */}
+          {/* ==================================
+              SECCIONES VISIBLES
+          ================================== */}
 
           <Section
             title={
@@ -1091,12 +1563,36 @@ function BusinessConfigurationContent() {
             <div className="grid gap-3 sm:grid-cols-2">
               {(
                 [
-                  ["showCover", "Mostrar portada", "Show cover"],
-                  ["showDescription", "Mostrar descripción", "Show description"],
-                  ["showLocation", "Mostrar ubicación", "Show location"],
-                  ["showOpeningHours", "Mostrar horarios", "Show hours"],
-                  ["showSocialLinks", "Mostrar redes sociales", "Show social links"],
-                  ["showGallery", "Mostrar galería", "Show gallery"],
+                  [
+                    "showCover",
+                    "Mostrar portada",
+                    "Show cover",
+                  ],
+                  [
+                    "showDescription",
+                    "Mostrar descripción",
+                    "Show description",
+                  ],
+                  [
+                    "showLocation",
+                    "Mostrar ubicación",
+                    "Show location",
+                  ],
+                  [
+                    "showOpeningHours",
+                    "Mostrar horarios",
+                    "Show hours",
+                  ],
+                  [
+                    "showSocialLinks",
+                    "Mostrar redes sociales",
+                    "Show social links",
+                  ],
+                  [
+                    "showGallery",
+                    "Mostrar galería",
+                    "Show gallery",
+                  ],
                 ] as const
               ).map(([key, labelEs, labelEn]) => (
                 <SwitchField
@@ -1109,7 +1605,9 @@ function BusinessConfigurationContent() {
             </div>
           </Section>
 
-          {/* MENSAJES */}
+          {/* ==================================
+              MENSAJES
+          ================================== */}
 
           {error && (
             <div
@@ -1133,22 +1631,26 @@ function BusinessConfigurationContent() {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploading || cameraKind !== null}
             className="rounded-xl bg-[#a3341f] px-6 py-4 text-base font-bold text-white shadow-sm transition hover:bg-[#872816] disabled:opacity-60"
           >
             {saving
               ? es
                 ? "Guardando..."
                 : "Saving..."
-              : es
-                ? "Guardar configuración"
-                : "Save settings"}
+              : uploading
+                ? es
+                  ? "Subiendo fotografías..."
+                  : "Uploading photos..."
+                : es
+                  ? "Guardar configuración"
+                  : "Save settings"}
           </button>
         </div>
 
-        {/* ====================================
+        {/* ==================================
             VISTA PREVIA
-        ==================================== */}
+        ================================== */}
 
         <aside className="min-w-0">
           <div className="sticky top-5">
@@ -1158,7 +1660,9 @@ function BusinessConfigurationContent() {
               </h2>
 
               <span className="rounded-full bg-[#f4e6d9] px-3 py-1 text-xs font-semibold text-[#a3341f]">
-                {es ? "Vista en edición" : "Editing preview"}
+                {es
+                  ? "Vista en edición"
+                  : "Editing preview"}
               </span>
             </div>
 
@@ -1167,9 +1671,7 @@ function BusinessConfigurationContent() {
               style={{
                 ...previewStyle,
                 borderRadius:
-                  theme.roundedCards === false
-                    ? 6
-                    : 24,
+                  theme.roundedCards === false ? 6 : 24,
               }}
             >
               {settings.showCover !== false && (
@@ -1211,11 +1713,17 @@ function BusinessConfigurationContent() {
                         color: theme.primaryColor,
                       }}
                     >
-                      {previewTagline || (es ? "Tu eslogan" : "Your tagline")}
+                      {previewTagline ||
+                        (es
+                          ? "Tu eslogan"
+                          : "Your tagline")}
                     </p>
 
                     <h3 className="mt-1 break-words text-xl font-black">
-                      {name || (es ? "Mi negocio" : "My business")}
+                      {name ||
+                        (es
+                          ? "Mi negocio"
+                          : "My business")}
                     </h3>
                   </div>
                 </div>
@@ -1235,7 +1743,9 @@ function BusinessConfigurationContent() {
                     style={{
                       backgroundColor: theme.buttonColor,
                       borderRadius:
-                        theme.roundedButtons === false ? 4 : 999,
+                        theme.roundedButtons === false
+                          ? 4
+                          : 999,
                     }}
                   >
                     {es ? "Ver menú" : "View menu"}
@@ -1244,10 +1754,13 @@ function BusinessConfigurationContent() {
                   <span
                     className="px-3 py-2 text-xs font-bold"
                     style={{
-                      backgroundColor: theme.secondaryColor,
+                      backgroundColor:
+                        theme.secondaryColor,
                       color: theme.textColor,
                       borderRadius:
-                        theme.roundedButtons === false ? 4 : 999,
+                        theme.roundedButtons === false
+                          ? 4
+                          : 999,
                     }}
                   >
                     {es ? "Hacer apartado" : "Reserve"}
@@ -1277,6 +1790,21 @@ function BusinessConfigurationContent() {
           </div>
         </aside>
       </form>
+
+      {/* ==================================
+          VENTANA DE CÁMARA WEB
+          Se monta solo después del clic.
+      ================================== */}
+
+      {cameraKind !== null && (
+        <CameraCapture
+          lang={lang}
+          onCapture={(file) =>
+            uploadImage(file, cameraKind)
+          }
+          onClose={() => setCameraKind(null)}
+        />
+      )}
     </main>
   );
 }

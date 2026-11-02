@@ -18,17 +18,13 @@ import type {
 } from "react";
 
 import { CameraCapture } from "@/components/CameraCapture";
-
 import type {
   OwnerView,
   StallOpeningHour,
   StallSettings,
   StallTheme,
+  StallCoverPosition,
 } from "@/lib/stall";
-
-// ==========================================
-// CONSTANTES
-// ==========================================
 
 const DAYS = [
   ["Domingo", "Sunday"],
@@ -50,6 +46,11 @@ const DEFAULT_THEME: StallTheme = {
   layout: "classic",
   roundedCards: true,
   roundedButtons: true,
+
+  // Nuevas opciones.
+  coverPosition: "right",
+  headerBackgroundColor: "#ffffff",
+  headerTextColor: "#2e1b14",
 };
 
 const DEFAULT_HOURS: StallOpeningHour[] = DAYS.map(
@@ -132,18 +133,38 @@ function isValidUrl(value: string): boolean {
 
   try {
     const url = new URL(value);
-
-    return (
-      url.protocol === "https:" ||
-      url.protocol === "http:"
-    );
+    return url.protocol === "https:" || url.protocol === "http:";
   } catch {
     return false;
   }
 }
 
+function validHex(value: string | undefined, fallback: string): string {
+  return value && /^#[0-9a-fA-F]{6}$/.test(value)
+    ? value
+    : fallback;
+}
+
+function contrastRatioWhite(hex: string): boolean {
+  const channels = [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ].map((value) => {
+    const v = value / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+
+  const luminance =
+    channels[0] * 0.2126 +
+    channels[1] * 0.7152 +
+    channels[2] * 0.0722;
+
+  return luminance < 0.179;
+}
+
 // ==========================================
-// COMPONENTES DEL FORMULARIO
+// ELEMENTOS DEL FORMULARIO
 // ==========================================
 
 function Section({
@@ -234,7 +255,7 @@ function ColorField({
     <label className="flex items-center gap-3 rounded-xl border border-[#eaded3] p-3">
       <input
         type="color"
-        value={value}
+        value={validHex(value, "#ffffff")}
         onChange={(e) => onChange(e.target.value)}
         className="h-11 w-12 cursor-pointer rounded-lg border-0 bg-transparent"
       />
@@ -278,7 +299,7 @@ function SwitchField({
 }
 
 // ==========================================
-// SELECTOR DE IMÁGENES
+// SUBIR IMÁGENES / ABRIR CÁMARA
 // ==========================================
 
 function ImageUploader({
@@ -309,7 +330,6 @@ function ImageUploader({
     event: ChangeEvent<HTMLInputElement>,
   ) {
     const files = Array.from(event.target.files ?? []);
-
     event.target.value = "";
 
     if (!files.length) return;
@@ -321,7 +341,6 @@ function ImageUploader({
       try {
         await onUpload(file, kind);
       } catch {
-        // El componente principal muestra el error.
         break;
       }
     }
@@ -338,8 +357,6 @@ function ImageUploader({
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {/* SUBIR DESDE EL DISPOSITIVO */}
-
         <button
           type="button"
           disabled={disabled}
@@ -349,8 +366,6 @@ function ImageUploader({
           <span aria-hidden="true">📁</span>
           {es ? "Subir imagen" : "Upload image"}
         </button>
-
-        {/* ABRIR LA CÁMARA REAL */}
 
         <button
           type="button"
@@ -363,9 +378,6 @@ function ImageUploader({
         </button>
       </div>
 
-      {/* SOLO SELECCIÓN DE ARCHIVOS.
-          La cámara se controla con CameraCapture. */}
-
       <input
         ref={fileRef}
         type="file"
@@ -377,8 +389,6 @@ function ImageUploader({
           es ? "Seleccionar imagen" : "Select image"
         }
       />
-
-      {/* IMÁGENES CARGADAS */}
 
       {imageUrls.length > 0 && (
         <div
@@ -435,6 +445,497 @@ function ImageUploader({
 }
 
 // ==========================================
+// SELECTOR DE LOS DOS DISEÑOS
+// ==========================================
+
+function CoverDesignSelector({
+  value,
+  onChange,
+  lang,
+}: {
+  value: StallCoverPosition;
+  onChange: (value: StallCoverPosition) => void;
+  lang: "es" | "en";
+}) {
+  const es = lang === "es";
+
+  const designs: {
+    value: StallCoverPosition;
+    label: string;
+  }[] = [
+    {
+      value: "right",
+      label: es
+        ? "Portada a la derecha"
+        : "Cover on the right",
+    },
+    {
+      value: "background",
+      label: es
+        ? "Portada de fondo"
+        : "Background cover",
+    },
+  ];
+
+  return (
+    <fieldset>
+      <legend className="mb-3 text-sm font-bold text-[#4b3024]">
+        {es ? "Diseño de portada" : "Cover design"}
+      </legend>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {designs.map((design) => {
+          const selected = value === design.value;
+
+          return (
+            <label
+              key={design.value}
+              className={`cursor-pointer overflow-hidden rounded-2xl border-2 bg-white transition ${
+                selected
+                  ? "border-[#a3341f] ring-2 ring-[#a3341f]/15"
+                  : "border-[#eaded3] hover:border-[#cfa28d]"
+              }`}
+            >
+              <input
+                type="radio"
+                name="coverPosition"
+                value={design.value}
+                checked={selected}
+                onChange={() => onChange(design.value)}
+                className="sr-only"
+              />
+
+              <div className="p-2">
+                <svg
+                  viewBox="0 0 240 125"
+                  width="100%"
+                  role="img"
+                  aria-label={design.label}
+                  className="overflow-hidden rounded-xl"
+                >
+                  <rect
+                    width="240"
+                    height="125"
+                    rx="9"
+                    fill="#a85c3d"
+                  />
+
+                  {design.value === "right" ? (
+                    <>
+                      <path
+                        d="M140 82 L174 39 L202 75 L220 52 L240 72 V125 H140Z"
+                        fill="#d89b70"
+                      />
+                      <circle
+                        cx="208"
+                        cy="35"
+                        r="13"
+                        fill="#f2c58d"
+                      />
+                      <rect
+                        x="5"
+                        y="5"
+                        width="135"
+                        height="115"
+                        rx="8"
+                        fill="#ffffff"
+                      />
+                      <rect
+                        x="17"
+                        y="20"
+                        width="32"
+                        height="32"
+                        rx="8"
+                        fill="#d4a890"
+                      />
+                      <rect
+                        x="58"
+                        y="24"
+                        width="67"
+                        height="9"
+                        rx="4"
+                        fill="#9e6a51"
+                      />
+                      <rect
+                        x="58"
+                        y="39"
+                        width="54"
+                        height="5"
+                        rx="2"
+                        fill="#c7ada0"
+                      />
+                      <rect
+                        x="17"
+                        y="68"
+                        width="107"
+                        height="5"
+                        rx="2"
+                        fill="#c7ada0"
+                      />
+                      <rect
+                        x="17"
+                        y="80"
+                        width="91"
+                        height="5"
+                        rx="2"
+                        fill="#c7ada0"
+                      />
+                      <rect
+                        x="17"
+                        y="99"
+                        width="48"
+                        height="12"
+                        rx="6"
+                        fill="#b36b4f"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <path
+                        d="M0 85 L60 19 L114 82 L167 37 L240 90 V125 H0Z"
+                        fill="#d89b70"
+                      />
+                      <circle
+                        cx="213"
+                        cy="28"
+                        r="14"
+                        fill="#f2c58d"
+                      />
+                      <rect
+                        x="14"
+                        y="15"
+                        width="135"
+                        height="95"
+                        rx="9"
+                        fill="#ffffff"
+                        fillOpacity=".94"
+                      />
+                      <rect
+                        x="26"
+                        y="26"
+                        width="28"
+                        height="28"
+                        rx="7"
+                        fill="#d4a890"
+                      />
+                      <rect
+                        x="63"
+                        y="30"
+                        width="69"
+                        height="8"
+                        rx="4"
+                        fill="#9e6a51"
+                      />
+                      <rect
+                        x="63"
+                        y="44"
+                        width="56"
+                        height="5"
+                        rx="2"
+                        fill="#c7ada0"
+                      />
+                      <rect
+                        x="26"
+                        y="67"
+                        width="105"
+                        height="5"
+                        rx="2"
+                        fill="#c7ada0"
+                      />
+                      <rect
+                        x="26"
+                        y="79"
+                        width="87"
+                        height="5"
+                        rx="2"
+                        fill="#c7ada0"
+                      />
+                      <rect
+                        x="26"
+                        y="94"
+                        width="48"
+                        height="10"
+                        rx="5"
+                        fill="#b36b4f"
+                      />
+                    </>
+                  )}
+                </svg>
+              </div>
+
+              <div className="flex items-center gap-2 px-3 pb-4 pt-1">
+                <span
+                  aria-hidden="true"
+                  className={`flex size-5 items-center justify-center rounded-full border-2 text-xs font-bold ${
+                    selected
+                      ? "border-[#a3341f] bg-[#a3341f] text-white"
+                      : "border-[#c7b5a7] bg-white"
+                  }`}
+                >
+                  {selected ? "✓" : ""}
+                </span>
+
+                <span className="text-sm font-semibold text-[#302018]">
+                  {design.label}
+                </span>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+// ==========================================
+// VISTA PREVIA DEL ENCABEZADO
+// ==========================================
+
+function BusinessHeaderPreview({
+  name,
+  slug,
+  settings,
+  lang,
+}: {
+  name: string;
+  slug: string;
+  settings: StallSettings;
+  lang: "es" | "en";
+}) {
+  const es = lang === "es";
+
+  const theme = {
+    ...DEFAULT_THEME,
+    ...settings.theme,
+  };
+
+  const coverPosition =
+    theme.coverPosition === "background"
+      ? "background"
+      : "right";
+
+  const headerBackgroundColor = validHex(
+    theme.headerBackgroundColor,
+    "#ffffff",
+  );
+
+  const headerTextColor = validHex(
+    theme.headerTextColor,
+    "#2e1b14",
+  );
+
+  const accentColor = validHex(
+    theme.primaryColor,
+    "#a3341f",
+  );
+
+  const isDemo = slug === "birria-dona-lupe";
+
+  const logoPreview =
+    settings.logoUrl ||
+    (isDemo ? "/logo-birria-dona-lupe.png" : "");
+
+  const coverPreview =
+    settings.coverUrl ||
+    (isDemo ? "/menu/plato-birria.jpg" : "");
+
+  const tagline =
+    (es ? settings.taglineEs : settings.taglineEn) ||
+    (isDemo
+      ? es
+        ? "Tradición y sabor casero"
+        : "Homestyle tradition and flavor"
+      : "");
+
+  const description =
+    (es ? settings.descriptionEs : settings.descriptionEn) ||
+    (isDemo
+      ? es
+        ? "El sabor de la birria tradicional, preparado para ti. Descubre lo que tenemos disponible y aparta tus favoritos antes de que se acaben."
+        : "The taste of traditional birria, prepared for you. Explore what's available and reserve your favorites before they sell out."
+      : "");
+
+  const welcomeMessage = es
+    ? settings.welcomeMessageEs
+    : settings.welcomeMessageEn;
+
+  const location = [
+    settings.address,
+    settings.city,
+    settings.state,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const showCover = settings.showCover !== false;
+  const backgroundHero =
+    showCover && coverPosition === "background";
+
+  const previewFont =
+    theme.typography === "classic"
+      ? "Georgia, serif"
+      : theme.typography === "elegant"
+        ? '"Palatino Linotype", Georgia, serif'
+        : theme.typography === "rounded"
+          ? '"Trebuchet MS", Arial, sans-serif'
+          : "Arial, sans-serif";
+
+  const cardStyle: CSSProperties = {
+    backgroundColor: headerBackgroundColor,
+    color: headerTextColor,
+  };
+
+  const image = (
+    <>
+      {coverPreview ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={coverPreview}
+          alt={es ? "Vista de portada" : "Cover preview"}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#f4e5d5] text-5xl">
+          🍽️
+        </div>
+      )}
+    </>
+  );
+
+  const information = (
+    <div
+      className={`relative z-10 flex min-w-0 flex-col justify-center gap-4 p-5 sm:p-6 ${
+        backgroundHero
+          ? "w-full max-w-[540px] rounded-2xl shadow-lg"
+          : ""
+      }`}
+      style={cardStyle}
+    >
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[#eaded3] bg-[#fff9ed]">
+          {logoPreview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoPreview}
+              alt="Logo"
+              className="h-full w-full object-contain p-1"
+            />
+          ) : (
+            <span className="text-3xl">🏪</span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          {tagline && (
+            <p
+              className="text-[10px] font-black uppercase tracking-[0.12em]"
+              style={{ color: accentColor }}
+            >
+              {tagline}
+            </p>
+          )}
+
+          <h3
+            className="mt-1 break-words text-xl font-black leading-tight"
+            style={{ color: headerTextColor }}
+          >
+            {name || (es ? "Mi negocio" : "My business")}
+          </h3>
+        </div>
+      </div>
+
+      {settings.showDescription !== false && description && (
+        <p
+          className="text-xs leading-relaxed sm:text-sm"
+          style={{
+            color: headerTextColor,
+            opacity: 0.85,
+          }}
+        >
+          {description}
+        </p>
+      )}
+
+      {welcomeMessage && (
+        <p
+          className="text-xs font-semibold"
+          style={{ color: accentColor }}
+        >
+          {welcomeMessage}
+        </p>
+      )}
+
+      {settings.showLocation !== false && location && (
+        <p
+          className="text-xs"
+          style={{
+            color: headerTextColor,
+            opacity: 0.85,
+          }}
+        >
+          📍 {location}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-green-100 px-3 py-1.5 text-xs font-bold text-green-700">
+          ● {es ? "Abierto" : "Open"}
+        </span>
+
+        <span
+          className="rounded-full border px-3 py-1.5 text-[11px]"
+          style={{
+            color: headerTextColor,
+            borderColor: `${headerTextColor}33`,
+          }}
+        >
+          ◷ {es ? "Actualizado ahora" : "Updated now"}
+        </span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      className="overflow-hidden rounded-[1.6rem] border border-[#eaded3] shadow-sm"
+      style={{
+        backgroundColor: headerBackgroundColor,
+        fontFamily: previewFont,
+      }}
+    >
+      {backgroundHero ? (
+        <div className="relative isolate min-h-[300px] p-4 sm:flex sm:items-center sm:p-6">
+          <div className="absolute inset-0 -z-20">
+            {image}
+          </div>
+
+          <div className="pointer-events-none absolute inset-0 -z-10 bg-black/20" />
+
+          {information}
+        </div>
+      ) : (
+        <div
+          className={
+            showCover
+              ? "grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr]"
+              : "grid grid-cols-1"
+          }
+        >
+          {information}
+
+          {showCover && (
+            <div className="relative min-h-[180px] bg-[#f4e5d5] md:min-h-[270px]">
+              {image}
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==========================================
 // PÁGINA CON SUSPENSE
 // ==========================================
 
@@ -454,10 +955,6 @@ export default function BusinessConfigurationPage() {
   );
 }
 
-// ==========================================
-// CONTENIDO DE CONFIGURACIÓN
-// ==========================================
-
 function BusinessConfigurationContent() {
   const params = useParams<{
     lang: string;
@@ -473,7 +970,6 @@ function BusinessConfigurationContent() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -481,18 +977,11 @@ function BusinessConfigurationContent() {
   const [settings, setSettings] =
     useState<StallSettings>(defaultSettings);
 
-  // NUEVO:
-  // null = cámara cerrada.
-  // logo / cover / gallery = cámara para esa sección.
   const [cameraKind, setCameraKind] =
     useState<ImageKind | null>(null);
 
   const panelHref = `/${lang}/panel/${slug}`;
   const publicHref = `/${lang}/${slug}`;
-
-  // ========================================
-  // CARGAR CONFIGURACIÓN
-  // ========================================
 
   const loadData = useCallback(async () => {
     try {
@@ -537,16 +1026,11 @@ function BusinessConfigurationContent() {
     return () => clearTimeout(timeout);
   }, [loadData]);
 
-  // ========================================
-  // ACTUALIZAR CAMPOS
-  // ========================================
-
   function update<K extends keyof StallSettings>(
     key: K,
     value: StallSettings[K],
   ) {
     setNotice("");
-
     setSettings((current) => ({
       ...current,
       [key]: value,
@@ -558,7 +1042,6 @@ function BusinessConfigurationContent() {
     value: StallTheme[K],
   ) {
     setNotice("");
-
     setSettings((current) => ({
       ...current,
       theme: {
@@ -586,7 +1069,7 @@ function BusinessConfigurationContent() {
   }
 
   // ========================================
-  // SUBIR IMÁGENES
+  // SUBIDA A SUPABASE
   // ========================================
 
   async function uploadImage(
@@ -615,7 +1098,10 @@ function BusinessConfigurationContent() {
       );
     }
 
-    if (file.size === 0 || file.size > MAX_IMAGE_BYTES) {
+    if (
+      file.size === 0 ||
+      file.size > MAX_IMAGE_BYTES
+    ) {
       fail(
         es
           ? "La imagen debe pesar menos de 5 MB."
@@ -639,7 +1125,6 @@ function BusinessConfigurationContent() {
 
     try {
       const form = new FormData();
-
       form.append("kind", kind);
       form.append("file", file);
 
@@ -711,10 +1196,6 @@ function BusinessConfigurationContent() {
             : "Image upload error.";
 
       setError(message);
-
-      // IMPORTANTE:
-      // La cámara necesita recibir el error
-      // para no cerrarse cuando falle la subida.
       throw err;
     } finally {
       setUploading(false);
@@ -722,7 +1203,7 @@ function BusinessConfigurationContent() {
   }
 
   // ========================================
-  // ABRIR Y CERRAR CÁMARA
+  // CÁMARA
   // ========================================
 
   function openCamera(kind: ImageKind) {
@@ -744,9 +1225,6 @@ function BusinessConfigurationContent() {
       return;
     }
 
-    // El componente CameraCapture se monta
-    // únicamente después de este clic.
-    // Ahí el navegador solicitará el permiso.
     setCameraKind(kind);
   }
 
@@ -878,52 +1356,25 @@ function BusinessConfigurationContent() {
     }
   }
 
-  // ========================================
-  // VISTA PREVIA
-  // ========================================
-
   const theme = {
     ...DEFAULT_THEME,
     ...settings.theme,
   };
 
-  const previewStyle: CSSProperties = {
-    backgroundColor: theme.backgroundColor,
-    color: theme.textColor,
-    fontFamily:
-      theme.typography === "classic"
-        ? "Georgia, serif"
-        : theme.typography === "elegant"
-          ? '"Palatino Linotype", Georgia, serif'
-          : theme.typography === "rounded"
-            ? '"Trebuchet MS", Arial, sans-serif'
-            : "Arial, sans-serif",
-  };
+  const headerBackgroundColor = validHex(
+    theme.headerBackgroundColor,
+    "#ffffff",
+  );
 
-  const previewTagline = es
-    ? settings.taglineEs
-    : settings.taglineEn;
+  const headerTextColor = validHex(
+    theme.headerTextColor,
+    "#2e1b14",
+  );
 
-  const previewDescription = es
-    ? settings.descriptionEs
-    : settings.descriptionEn;
-
-  const demoLogo =
-    slug === "birria-dona-lupe"
-      ? "/logo-birria-dona-lupe.png"
-      : "";
-
-  const demoCover =
-    slug === "birria-dona-lupe"
-      ? "/menu/plato-birria.jpg"
-      : "";
-
-  const logoPreview = settings.logoUrl || demoLogo;
-  const coverPreview = settings.coverUrl || demoCover;
-
-  // ========================================
-  // CARGANDO
-  // ========================================
+  const coverPosition =
+    theme.coverPosition === "background"
+      ? "background"
+      : "right";
 
   if (loading) {
     return (
@@ -947,26 +1398,18 @@ function BusinessConfigurationContent() {
               : "Could not open Settings"}
           </h1>
 
-          <p className="mt-3 text-red-700">
-            {error}
-          </p>
+          <p className="mt-3 text-red-700">{error}</p>
 
           <Link
             href={panelHref}
             className="mt-5 inline-block font-semibold text-[#a3341f] underline"
           >
-            {es
-              ? "Volver al panel"
-              : "Back to dashboard"}
+            {es ? "Volver al panel" : "Back to dashboard"}
           </Link>
         </div>
       </main>
     );
   }
-
-  // ========================================
-  // PÁGINA PRINCIPAL
-  // ========================================
 
   return (
     <main className="min-h-screen bg-[#fffaf4] pb-20">
@@ -1004,6 +1447,7 @@ function BusinessConfigurationContent() {
           <Link
             href={publicHref}
             target="_blank"
+            rel="noopener noreferrer"
             className="rounded-xl border border-[#eaded3] bg-white px-5 py-3 text-sm font-bold text-[#4b3024] shadow-sm"
           >
             {es
@@ -1015,7 +1459,7 @@ function BusinessConfigurationContent() {
 
       <form
         onSubmit={save}
-        className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-8 xl:grid-cols-[minmax(0,1fr)_380px]"
+        className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-8 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.9fr)]"
       >
         <div className="flex min-w-0 flex-col gap-6">
           {/* ==================================
@@ -1034,9 +1478,7 @@ function BusinessConfigurationContent() {
           >
             <div className="grid gap-5">
               <Field
-                label={
-                  es ? "Nombre del negocio" : "Business name"
-                }
+                label={es ? "Nombre del negocio" : "Business name"}
                 value={name}
                 maxLength={120}
                 onChange={(v) => {
@@ -1114,9 +1556,7 @@ function BusinessConfigurationContent() {
           >
             <div className="space-y-5">
               <ImageUploader
-                title={
-                  es ? "Logo del negocio" : "Business logo"
-                }
+                title={es ? "Logo del negocio" : "Business logo"}
                 description={
                   es
                     ? "Sube una imagen cuadrada de tu logo."
@@ -1126,40 +1566,30 @@ function BusinessConfigurationContent() {
                 lang={lang}
                 disabled={uploading || saving}
                 imageUrls={
-                  settings.logoUrl
-                    ? [settings.logoUrl]
-                    : []
+                  settings.logoUrl ? [settings.logoUrl] : []
                 }
                 onUpload={uploadImage}
-                onRemove={(index) =>
-                  removeImage("logo", index)
-                }
+                onRemove={(i) => removeImage("logo", i)}
                 onOpenCamera={openCamera}
               />
 
               <ImageUploader
                 title={
-                  es
-                    ? "Fotografía de portada"
-                    : "Cover photo"
+                  es ? "Fotografía de portada" : "Cover photo"
                 }
                 description={
                   es
-                    ? "Elige la foto principal que verán tus clientes."
+                    ? "Elige la fotografía principal que verán tus clientes."
                     : "Choose the main photo customers will see."
                 }
                 kind="cover"
                 lang={lang}
                 disabled={uploading || saving}
                 imageUrls={
-                  settings.coverUrl
-                    ? [settings.coverUrl]
-                    : []
+                  settings.coverUrl ? [settings.coverUrl] : []
                 }
                 onUpload={uploadImage}
-                onRemove={(index) =>
-                  removeImage("cover", index)
-                }
+                onRemove={(i) => removeImage("cover", i)}
                 onOpenCamera={openCamera}
               />
 
@@ -1179,9 +1609,7 @@ function BusinessConfigurationContent() {
                 disabled={uploading || saving}
                 imageUrls={settings.galleryUrls ?? []}
                 onUpload={uploadImage}
-                onRemove={(index) =>
-                  removeImage("gallery", index)
-                }
+                onRemove={(i) => removeImage("gallery", i)}
                 onOpenCamera={openCamera}
               />
 
@@ -1191,21 +1619,50 @@ function BusinessConfigurationContent() {
                   className="rounded-xl bg-[#fff3df] px-4 py-3 text-sm font-semibold text-[#8a4a20]"
                 >
                   {es
-                    ? "Subiendo fotografía a Supabase..."
-                    : "Uploading photo to Supabase..."}
+                    ? "Subiendo fotografía ..."
+                    : "Uploading photo ..."}
                 </div>
               )}
 
               <p className="text-xs leading-relaxed text-[#80695d]">
                 {es
-                  ? "Las imágenes se envían a Supabase al seleccionarlas o al confirmar una fotografía de la cámara. No aparecerán en tu página pública hasta que guardes la configuración. Quitar una foto del formulario no borra el archivo almacenado."
-                  : "Images upload to Supabase when selected or confirmed from the camera. They do not appear on your public page until you save settings. Removing a photo here does not delete the stored file."}
+                  ? "Las imágenes se envían a Supabase al seleccionarlas o confirmar una foto. Para mostrarlas en la página pública, pulsa Guardar configuración. Quitar una foto aquí no elimina el archivo de Storage."
+                  : "Images upload to Supabase when selected or confirmed. Select Save settings to show them on the public page. Removing an image here does not delete the stored file."}
               </p>
             </div>
           </Section>
 
           {/* ==================================
-              DISEÑO Y COLORES
+              DISEÑO DE PORTADA
+          ================================== */}
+
+          <Section
+            title={
+              es ? "Diseño de portada" : "Cover design"
+            }
+            description={
+              es
+                ? "Elige cómo se muestra la fotografía principal en el encabezado de tu negocio."
+                : "Choose how the main photograph appears in your business header."
+            }
+          >
+            <CoverDesignSelector
+              value={coverPosition}
+              onChange={(position) =>
+                updateTheme("coverPosition", position)
+              }
+              lang={lang}
+            />
+
+            <p className="mt-4 text-xs leading-relaxed text-[#80695d]">
+              {es
+                ? "La opción predeterminada es Portada a la derecha. Puedes cambiar entre los dos diseños cuando quieras."
+                : "The default is Cover on the right. You can switch between both designs at any time."}
+            </p>
+          </Section>
+
+          {/* ==================================
+              COLORES Y DISEÑO
           ================================== */}
 
           <Section
@@ -1214,15 +1671,13 @@ function BusinessConfigurationContent() {
             }
             description={
               es
-                ? "Elige los colores y el estilo visual de tu negocio."
-                : "Choose the colors and visual style of your business."
+                ? "Personaliza el fondo general, el cuadro informativo y sus textos por separado."
+                : "Customize the page background, information card and its text separately."
             }
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <ColorField
-                label={
-                  es ? "Color principal" : "Primary color"
-                }
+                label={es ? "Color principal" : "Primary color"}
                 value={theme.primaryColor!}
                 onChange={(v) =>
                   updateTheme("primaryColor", v)
@@ -1240,7 +1695,7 @@ function BusinessConfigurationContent() {
               />
 
               <ColorField
-                label={es ? "Fondo" : "Background"}
+                label={es ? "Fondo general" : "Page background"}
                 value={theme.backgroundColor!}
                 onChange={(v) =>
                   updateTheme("backgroundColor", v)
@@ -1248,7 +1703,7 @@ function BusinessConfigurationContent() {
               />
 
               <ColorField
-                label={es ? "Texto" : "Text"}
+                label={es ? "Texto general" : "Page text"}
                 value={theme.textColor!}
                 onChange={(v) =>
                   updateTheme("textColor", v)
@@ -1262,6 +1717,76 @@ function BusinessConfigurationContent() {
                   updateTheme("buttonColor", v)
                 }
               />
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-[#eaded3] bg-[#fffaf4] p-4 sm:p-5">
+              <h3 className="text-base font-black text-[#302018]">
+                {es
+                  ? "Cuadro de información"
+                  : "Information card"}
+              </h3>
+
+              <p className="mt-2 text-sm text-[#80695d]">
+                {es
+                  ? "Estos colores solo afectan el cuadro que contiene el logo, nombre, descripción y estado del negocio."
+                  : "These colors only affect the card containing the logo, name, description and business status."}
+              </p>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <ColorField
+                  label={
+                    es
+                      ? "Color del cuadro"
+                      : "Card background"
+                  }
+                  value={headerBackgroundColor}
+                  onChange={(v) => {
+                    updateTheme("headerBackgroundColor", v);
+                    updateTheme(
+                      "headerTextColor",
+                      contrastRatioWhite(v)
+                        ? "#ffffff"
+                        : "#2e1b14",
+                    );
+                  }}
+                />
+
+                <ColorField
+                  label={
+                    es
+                      ? "Texto del cuadro"
+                      : "Card text"
+                  }
+                  value={headerTextColor}
+                  onChange={(v) =>
+                    updateTheme("headerTextColor", v)
+                  }
+                />
+              </div>
+
+              <div
+                className="mt-4 rounded-xl border border-black/10 p-4"
+                style={{
+                  backgroundColor: headerBackgroundColor,
+                  color: headerTextColor,
+                }}
+              >
+                <p className="font-black">
+                  {name || (es ? "Mi negocio" : "My business")}
+                </p>
+
+                <p className="mt-2 text-sm">
+                  {es
+                    ? "Así se verá el texto sobre el color seleccionado."
+                    : "This is how the text looks on the selected color."}
+                </p>
+              </div>
+
+              <p className="mt-3 text-xs text-[#80695d]">
+                {es
+                  ? "Al cambiar el fondo del cuadro, sugerimos automáticamente un color de texto claro u oscuro. Puedes ajustarlo después."
+                  : "When you change the card background, we suggest light or dark text automatically. You can adjust it afterwards."}
+              </p>
             </div>
 
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
@@ -1316,9 +1841,7 @@ function BusinessConfigurationContent() {
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <SwitchField
                 label={
-                  es
-                    ? "Tarjetas redondeadas"
-                    : "Rounded cards"
+                  es ? "Tarjetas redondeadas" : "Rounded cards"
                 }
                 checked={theme.roundedCards !== false}
                 onChange={(v) =>
@@ -1328,9 +1851,7 @@ function BusinessConfigurationContent() {
 
               <SwitchField
                 label={
-                  es
-                    ? "Botones redondeados"
-                    : "Rounded buttons"
+                  es ? "Botones redondeados" : "Rounded buttons"
                 }
                 checked={theme.roundedButtons !== false}
                 onChange={(v) =>
@@ -1424,7 +1945,9 @@ function BusinessConfigurationContent() {
                 label="WhatsApp"
                 value={settings.whatsapp ?? ""}
                 maxLength={40}
-                onChange={(v) => update("whatsapp", v)}
+                onChange={(v) =>
+                  update("whatsapp", v)
+                }
               />
 
               <Field
@@ -1476,7 +1999,7 @@ function BusinessConfigurationContent() {
           </Section>
 
           {/* ==================================
-              HORARIOS DE ATENCIÓN
+              HORARIOS
           ================================== */}
 
           <Section
@@ -1550,9 +2073,7 @@ function BusinessConfigurationContent() {
 
           <Section
             title={
-              es
-                ? "Secciones visibles"
-                : "Visible sections"
+              es ? "Secciones visibles" : "Visible sections"
             }
             description={
               es
@@ -1627,8 +2148,6 @@ function BusinessConfigurationContent() {
             </div>
           )}
 
-          {/* GUARDAR */}
-
           <button
             type="submit"
             disabled={saving || uploading || cameraKind !== null}
@@ -1660,141 +2179,38 @@ function BusinessConfigurationContent() {
               </h2>
 
               <span className="rounded-full bg-[#f4e6d9] px-3 py-1 text-xs font-semibold text-[#a3341f]">
-                {es
-                  ? "Vista en edición"
-                  : "Editing preview"}
+                {es ? "Vista en edición" : "Editing preview"}
               </span>
             </div>
 
-            <div
-              className="overflow-hidden border border-[#eaded3] shadow-sm"
-              style={{
-                ...previewStyle,
-                borderRadius:
-                  theme.roundedCards === false ? 6 : 24,
-              }}
-            >
-              {settings.showCover !== false && (
-                <div className="h-40 bg-[#f4e5d5]">
-                  {coverPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={coverPreview}
-                      alt="Vista previa de portada"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-5xl">
-                      🍽️
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="p-5">
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[#eaded3] bg-white">
-                    {logoPreview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={logoPreview}
-                        alt="Vista previa del logo"
-                        className="h-full w-full object-contain"
-                      />
-                    ) : (
-                      <span className="text-3xl">🏪</span>
-                    )}
-                  </div>
-
-                  <div className="min-w-0">
-                    <p
-                      className="text-xs font-bold"
-                      style={{
-                        color: theme.primaryColor,
-                      }}
-                    >
-                      {previewTagline ||
-                        (es
-                          ? "Tu eslogan"
-                          : "Your tagline")}
-                    </p>
-
-                    <h3 className="mt-1 break-words text-xl font-black">
-                      {name ||
-                        (es
-                          ? "Mi negocio"
-                          : "My business")}
-                    </h3>
-                  </div>
-                </div>
-
-                {settings.showDescription !== false && (
-                  <p className="text-sm leading-relaxed opacity-80">
-                    {previewDescription ||
-                      (es
-                        ? "Aquí aparecerá la descripción de tu negocio."
-                        : "Your business description will appear here.")}
-                  </p>
-                )}
-
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <span
-                    className="px-3 py-2 text-xs font-bold text-white"
-                    style={{
-                      backgroundColor: theme.buttonColor,
-                      borderRadius:
-                        theme.roundedButtons === false
-                          ? 4
-                          : 999,
-                    }}
-                  >
-                    {es ? "Ver menú" : "View menu"}
-                  </span>
-
-                  <span
-                    className="px-3 py-2 text-xs font-bold"
-                    style={{
-                      backgroundColor:
-                        theme.secondaryColor,
-                      color: theme.textColor,
-                      borderRadius:
-                        theme.roundedButtons === false
-                          ? 4
-                          : 999,
-                    }}
-                  >
-                    {es ? "Hacer apartado" : "Reserve"}
-                  </span>
-                </div>
-
-                {settings.showLocation !== false &&
-                  (settings.city || settings.address) && (
-                    <p className="mt-5 text-xs opacity-80">
-                      📍{" "}
-                      {[
-                        settings.address,
-                        settings.city,
-                      ]
-                        .filter(Boolean)
-                        .join(", ")}
-                    </p>
-                  )}
-              </div>
-            </div>
+            <BusinessHeaderPreview
+              name={name}
+              slug={slug}
+              settings={settings}
+              lang={lang}
+            />
 
             <p className="mt-3 text-xs leading-relaxed text-[#80695d]">
               {es
-                ? "Esta vista previa es simplificada. Guarda los cambios para verlos en la página pública."
-                : "This is a simplified preview. Save changes to see them on the public page."}
+                ? "La vista previa reproduce la distribución y los colores del encabezado. Los cambios no se publicarán hasta que guardes."
+                : "The preview shows the header layout and colors. Changes are not published until you save."}
             </p>
+
+            <Link
+              href={publicHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-[#eaded3] bg-white px-4 py-3 text-sm font-bold text-[#a3341f] transition hover:bg-[#fff4e9]"
+            >
+              {es
+                ? "Ver página pública ↗"
+                : "View public page ↗"}
+            </Link>
           </div>
         </aside>
       </form>
 
-      {/* ==================================
-          VENTANA DE CÁMARA WEB
-          Se monta solo después del clic.
-      ================================== */}
+      {/* CÁMARA: SOLO SE MONTA AL PULSAR TOMAR FOTO */}
 
       {cameraKind !== null && (
         <CameraCapture

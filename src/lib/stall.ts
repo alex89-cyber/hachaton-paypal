@@ -1,5 +1,6 @@
 
 import { forecast, type SaleEvent } from "./forecast";
+
 import {
   type Dish,
   type Ingredient,
@@ -35,53 +36,93 @@ export type Reservation = {
   paypalOrderId: string | null;
   paypalAuthorizationId: string | null;
   payerId: string | null;
-  /** 4 digits the customer says at the counter. Null on reservations made before codes existed. */
+
+  /** 4 digits the customer says at the counter. */
   pickupCode: string | null;
+
   /** Public order number, counted from 1 each business day. */
   orderNumber: number | null;
 };
 
-/** What the owner's screen shows instead of the code, so only the customer knows it. */
+/** Hide the pickup code from the owner's screen. */
 export const HIDDEN_CODE = "****";
 
 const plain = (x: string) =>
-  x.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
+  x
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .trim();
 
-/** "Ana Ramírez López" → "Ana R.": enough to find the order, not to answer for the customer. */
+/** "Ana Ramírez López" → "Ana R." */
 export function shortName(name: string) {
   const [first, ...rest] = name.trim().split(/\s+/);
-  return rest.length ? `${first} ${rest[0][0].toUpperCase()}.` : (first ?? "");
+
+  return rest.length
+    ? `${first} ${rest[0][0].toUpperCase()}.`
+    : (first ?? "");
 }
 
-/** Whether a typed last name matches the reservation's, ignoring case and accents. */
-export function lastNameMatches(name: string, typed: string) {
+/** Check the surname without considering accents or case. */
+export function lastNameMatches(
+  name: string,
+  typed: string,
+) {
   const words = name.trim().split(/\s+/);
-  const last = plain((words.length > 1 ? words.slice(1) : words).join(" "));
+
+  const last = plain(
+    (words.length > 1 ? words.slice(1) : words).join(" "),
+  );
+
   const t = plain(typed);
-  return t.length > 1 && (last === t || last.split(/\s+/).includes(t));
+
+  return (
+    t.length > 1 &&
+    (last === t || last.split(/\s+/).includes(t))
+  );
 }
 
-/** The next order number for a day opened at openedAt. */
-export function nextOrderNumber(reservations: Reservation[], openedAt: string | null) {
+/** Next public order number for the active business day. */
+export function nextOrderNumber(
+  reservations: Reservation[],
+  openedAt: string | null,
+) {
   const since = openedAt ?? "";
-  return 1 + Math.max(0, ...reservations.filter((r) => r.createdAt >= since).map((r) => r.orderNumber ?? 0));
+
+  return (
+    1 +
+    Math.max(
+      0,
+      ...reservations
+        .filter((r) => r.createdAt >= since)
+        .map((r) => r.orderNumber ?? 0),
+    )
+  );
 }
 
 export const isActive = (r: Reservation) =>
   r.status === "held" || r.status === "authorized";
 
-/** A pickup code not used by any active reservation of the stall. */
-export function newPickupCode(reservations: Reservation[]) {
-  const taken = new Set(reservations.filter(isActive).map((r) => r.pickupCode));
+/** Generate an unused four-digit pickup code. */
+export function newPickupCode(
+  reservations: Reservation[],
+) {
+  const taken = new Set(
+    reservations
+      .filter(isActive)
+      .map((r) => r.pickupCode),
+  );
+
   for (;;) {
-    const code = String(Math.floor(Math.random() * 10_000)).padStart(4, "0");
+    const code = String(
+      Math.floor(Math.random() * 10_000),
+    ).padStart(4, "0");
+
     if (!taken.has(code)) return code;
   }
 }
 
-/** The reservations this browser made, so the stall page can show "Your reservation". */
 export const HOLDS_COOKIE = "th_holds";
-
 export const PAYER_COOKIE = "th_payer";
 
 export type StampCard = {
@@ -98,8 +139,11 @@ export type Loyalty = {
   cards: StampCard[];
 };
 
-export function phoneCardId(phone: string): string | null {
+export function phoneCardId(
+  phone: string,
+): string | null {
   const digits = phone.replace(/\D/g, "");
+
   return digits.length >= 10
     ? `tel:${digits.slice(-10)}`
     : null;
@@ -120,18 +164,16 @@ export function cardLabel(c: {
     : "PayPal";
 }
 
-/* =========================================
-   PERSONALIZACIÓN DEL NEGOCIO
-   ========================================= */
+// ==========================================
+// PERSONALIZACIÓN DEL NEGOCIO
+// ==========================================
 
 /**
- * Configuración visual y de contacto de cada negocio.
- *
  * Las propiedades son opcionales para mantener
- * compatibilidad con los negocios ya existentes.
+ * compatibilidad con los negocios existentes.
  *
- * Las imágenes se almacenarán en Supabase Storage.
- * Aquí solamente se guardarán sus URLs.
+ * Las imágenes se almacenan en Supabase Storage.
+ * Aquí se guardan sus URLs.
  */
 
 export type StallTypography =
@@ -145,6 +187,21 @@ export type StallLayout =
   | "grid"
   | "compact";
 
+/**
+ * NUEVO:
+ *
+ * right:
+ *   Información a la izquierda y portada
+ *   a la derecha.
+ *
+ * background:
+ *   Portada detrás de todo el encabezado
+ *   con tarjeta de información superpuesta.
+ */
+export type StallCoverPosition =
+  | "right"
+  | "background";
+
 export type StallTheme = {
   primaryColor?: string;
   secondaryColor?: string;
@@ -157,6 +214,19 @@ export type StallTheme = {
 
   roundedCards?: boolean;
   roundedButtons?: boolean;
+
+  // ========================================
+  // NUEVA PERSONALIZACIÓN DEL ENCABEZADO
+  // ========================================
+
+  /** Color independiente de la tarjeta informativa. */
+  headerBackgroundColor?: string;
+
+  /** Color de texto dentro de la tarjeta informativa. */
+  headerTextColor?: string;
+
+  /** Ubicación de la fotografía de portada. */
+  coverPosition?: StallCoverPosition;
 };
 
 export type StallOpeningHour = {
@@ -167,7 +237,10 @@ export type StallOpeningHour = {
 };
 
 export type StallSettings = {
-  // Identidad del establecimiento
+  // ========================================
+  // IDENTIDAD
+  // ========================================
+
   logoUrl?: string | null;
   coverUrl?: string | null;
   galleryUrls?: string[];
@@ -181,7 +254,10 @@ export type StallSettings = {
   welcomeMessageEs?: string;
   welcomeMessageEn?: string;
 
-  // Dirección y ubicación
+  // ========================================
+  // UBICACIÓN
+  // ========================================
+
   address?: string;
   city?: string;
   state?: string;
@@ -192,7 +268,10 @@ export type StallSettings = {
   latitude?: number | null;
   longitude?: number | null;
 
-  // Información de contacto
+  // ========================================
+  // CONTACTO
+  // ========================================
+
   phone?: string;
   whatsapp?: string;
   email?: string;
@@ -202,13 +281,22 @@ export type StallSettings = {
   tiktok?: string;
   website?: string;
 
-  // Horarios
+  // ========================================
+  // HORARIOS
+  // ========================================
+
   openingHours?: StallOpeningHour[];
 
-  // Identidad visual
+  // ========================================
+  // APARIENCIA
+  // ========================================
+
   theme?: StallTheme;
 
-  // Elementos de la página pública
+  // ========================================
+  // VISIBILIDAD
+  // ========================================
+
   showCover?: boolean;
   showDescription?: boolean;
   showLocation?: boolean;
@@ -269,6 +357,14 @@ export function defaultStallSettings(): StallSettings {
 
       roundedCards: true,
       roundedButtons: true,
+
+      // Diseño original por defecto.
+      coverPosition: "right",
+
+      // El encabezado puede tener otro color
+      // sin cambiar el fondo general.
+      headerBackgroundColor: "#FFFFFF",
+      headerTextColor: "#2E1B14",
     },
 
     showCover: true,
@@ -280,9 +376,9 @@ export function defaultStallSettings(): StallSettings {
   };
 }
 
-/* =========================================
-   ESTADO DEL NEGOCIO
-   ========================================= */
+// ==========================================
+// ESTADO DEL NEGOCIO
+// ==========================================
 
 export type StallState = {
   slug: string;
@@ -307,15 +403,14 @@ export type StallState = {
 
   /**
    * Personalización opcional.
-   * Los registros antiguos siguen siendo válidos
-   * aunque todavía no tengan settings.
+   * Los registros antiguos siguen siendo válidos.
    */
   settings?: StallSettings;
 };
 
-/* =========================================
-   VISTA PÚBLICA
-   ========================================= */
+// ==========================================
+// VISTA PÚBLICA
+// ==========================================
 
 export type PublicDish = {
   id: string;
@@ -375,9 +470,9 @@ export function publicSnapshot(
   };
 }
 
-/* =========================================
-   VISTA DEL DUEÑO
-   ========================================= */
+// ==========================================
+// VISTA DEL DUEÑO
+// ==========================================
 
 export type OwnerDish = PublicDish & {
   recipe: Dish["recipe"];
@@ -453,7 +548,6 @@ export function ownerView(
     ingredients: s.ingredients,
 
     today: cashUp(s),
-
     loyalty: s.loyalty,
 
     reservations: [...s.reservations]
@@ -463,11 +557,13 @@ export function ownerView(
             Number(isActive(a)) ||
           a.pickupBy.localeCompare(b.pickupBy),
       )
-      // The owner confirms the code or last name with the customer, so neither is shown.
+      // Hide pickup codes and complete surnames.
       .map((r) => ({
         ...r,
         customerName: shortName(r.customerName),
-        pickupCode: r.pickupCode ? HIDDEN_CODE : null,
+        pickupCode: r.pickupCode
+          ? HIDDEN_CODE
+          : null,
       })),
 
     dishes: s.dishes.map((d) => {
@@ -478,7 +574,6 @@ export function ownerView(
 
       return {
         id: d.id,
-
         nameEs: d.nameEs,
         nameEn: d.nameEn,
 
@@ -508,9 +603,9 @@ export function ownerView(
   };
 }
 
-/* =========================================
-   CORTE DE CAJA
-   ========================================= */
+// ==========================================
+// CORTE DE CAJA
+// ==========================================
 
 export type CashUp = {
   salesCount: number;

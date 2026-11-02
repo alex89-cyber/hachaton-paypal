@@ -8,15 +8,9 @@ import type { CSSProperties, FormEvent } from "react";
 import type { Dictionary } from "@/dictionaries";
 import { clock, fill, minutesSince, money } from "@/lib/format";
 import type { PublicSnapshot } from "@/lib/stall";
-
 import { AgentChat } from "./AgentChat";
 import { NotifyButton, forgetWatch } from "./NotifyButton";
 
-// ==========================================
-// TIPOS
-// ==========================================
-
-/** Una reserva activa, como la ve el cliente. */
 export type HeldOrder = {
   code: string | null;
   orderNumber: number | null;
@@ -26,10 +20,7 @@ export type HeldOrder = {
 };
 
 export type Confirmation =
-  | ({
-      kind: "reserved";
-      name: string;
-    } & HeldOrder)
+  | ({ kind: "reserved"; name: string } & HeldOrder)
   | { kind: "cancelled" }
   | { kind: "error" };
 
@@ -42,40 +33,26 @@ export type StampCardInfo = {
 const POLL_MS = 5_000;
 const FEW = 5;
 
-// ==========================================
-// IMÁGENES
-// ==========================================
-
 function normalize(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-function getDemoDishImage(
-  nameEs: string,
-  nameEn: string,
-): string | null {
+function getDemoDishImage(nameEs: string, nameEn: string): string | null {
   const es = normalize(nameEs);
   const en = normalize(nameEn);
 
   if (es.includes("quesabirria") || en.includes("quesabirria")) {
     return "/menu/quesabirria.jpg";
   }
-
   if (es.includes("plato de birria") || en.includes("birria plate")) {
     return "/menu/plato-birria.jpg";
   }
-
   if (es.includes("consome") || en.includes("consome")) {
     return "/menu/consome.jpg";
   }
-
   if (es.includes("taco") || en.includes("taco")) {
     return "/menu/tacos.jpg";
   }
-
   return null;
 }
 
@@ -185,10 +162,6 @@ function CustomImage({
   );
 }
 
-// ==========================================
-// VALIDACIONES
-// ==========================================
-
 function safeColor(value: string | undefined): string | undefined {
   return value && /^#[0-9a-fA-F]{6}$/.test(value)
     ? value
@@ -197,7 +170,6 @@ function safeColor(value: string | undefined): string | undefined {
 
 function safeUrl(value: string | null | undefined): string | null {
   if (!value) return null;
-
   try {
     const url = new URL(value);
     return url.protocol === "https:" || url.protocol === "http:"
@@ -207,10 +179,6 @@ function safeUrl(value: string | null | undefined): string | null {
     return null;
   }
 }
-
-// ==========================================
-// PÁGINA PÚBLICA
-// ==========================================
 
 export function PublicStall({
   initial,
@@ -233,24 +201,14 @@ export function PublicStall({
 }) {
   const [snap, setSnap] = useState(initial);
   const [now, setNow] = useState(() => Date.now());
-
   const es = lang === "es";
-
-  // ========================================
-  // PERSONALIZACIÓN
-  // ========================================
 
   const settings = snap.settings;
   const theme = settings?.theme;
   const isDemo = snap.slug === "birria-dona-lupe";
 
-  const logoFallback = isDemo
-    ? "/logo-birria-dona-lupe.png"
-    : null;
-
-  const coverFallback = isDemo
-    ? "/menu/plato-birria.jpg"
-    : null;
+  const logoFallback = isDemo ? "/logo-birria-dona-lupe.png" : null;
+  const coverFallback = isDemo ? "/menu/plato-birria.jpg" : null;
 
   const logoUrl = safeUrl(settings?.logoUrl);
   const coverUrl = safeUrl(settings?.coverUrl);
@@ -280,6 +238,16 @@ export function PublicStall({
   const textColor = safeColor(theme?.textColor);
   const backgroundColor = safeColor(theme?.backgroundColor);
   const buttonColor = safeColor(theme?.buttonColor);
+
+  // Nuevas opciones: independientes del fondo de toda la página.
+  const headerBackgroundColor =
+    safeColor(theme?.headerBackgroundColor) ?? "#ffffff";
+  const headerTextColor =
+    safeColor(theme?.headerTextColor) ?? "#2e1b14";
+  const coverPosition =
+    theme?.coverPosition === "background" ? "background" : "right";
+  const showCover = settings?.showCover !== false;
+  const backgroundHero = showCover && coverPosition === "background";
 
   const fontFamily =
     theme?.typography === "classic"
@@ -338,10 +306,6 @@ export function PublicStall({
         settings?.email,
     );
 
-  // ========================================
-  // ACTUALIZACIÓN DE DISPONIBILIDAD
-  // ========================================
-
   useEffect(() => {
     let alive = true;
 
@@ -356,12 +320,10 @@ export function PublicStall({
           setSnap(await response.json());
         }
       } catch {
-        // Mantener los últimos datos disponibles.
+        // Conservar los últimos datos.
       }
 
-      if (alive) {
-        setNow(Date.now());
-      }
+      if (alive) setNow(Date.now());
     };
 
     const id = setInterval(tick, POLL_MS);
@@ -389,9 +351,188 @@ export function PublicStall({
   const gone = snap.dishes.filter((dish) => dish.portions === 0);
   const dishes = [...available, ...gone];
 
-  // ========================================
-  // PÁGINA PÚBLICA CON MÁRGENES MEJORADOS
-  // ========================================
+  // Mostrar la foto en ambas modalidades.
+  const coverPhoto = (
+    <>
+      {coverUrl ? (
+        <CustomImage
+          key={coverUrl}
+          src={coverUrl}
+          fallback={coverFallback}
+          alt={`Portada de ${snap.name}`}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : coverFallback ? (
+        <Image
+          src={coverFallback}
+          alt={
+            es
+              ? "Plato de birria tradicional"
+              : "Traditional birria plate"
+          }
+          fill
+          sizes="(min-width: 1024px) 100vw, 100vw"
+          className="object-cover"
+          priority
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#f4e5d5] text-7xl">
+          🍽️
+        </div>
+      )}
+    </>
+  );
+
+  // Se reutiliza exactamente la información en ambos diseños.
+  const headerInformation = (
+    <div
+      className={`relative z-10 flex min-w-0 flex-col justify-center gap-6 px-6 py-8 sm:px-9 sm:py-12 lg:px-12 lg:py-14 ${
+        backgroundHero
+          ? "w-full max-w-[720px] rounded-[1.5rem] shadow-xl"
+          : ""
+      }`}
+      style={{
+        backgroundColor: headerBackgroundColor,
+        color: headerTextColor,
+      }}
+    >
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-7">
+        <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-3xl border border-line bg-[#fff9ed] shadow-sm sm:h-36 sm:w-36">
+          {logoUrl ? (
+            <CustomImage
+              key={logoUrl}
+              src={logoUrl}
+              fallback={logoFallback}
+              alt={`Logo de ${snap.name}`}
+              className="h-full w-full object-contain p-1"
+            />
+          ) : logoFallback ? (
+            <Image
+              src={logoFallback}
+              alt={`Logo de ${snap.name}`}
+              fill
+              sizes="(min-width: 640px) 144px, 128px"
+              className="object-contain p-1"
+              priority
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-5xl">
+              🏪
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0">
+          {tagline && (
+            <p
+              className="text-xs font-bold uppercase tracking-[0.18em] text-brand"
+              style={
+                primaryColor
+                  ? { color: primaryColor }
+                  : undefined
+              }
+            >
+              {tagline}
+            </p>
+          )}
+
+          <h1
+            className="mt-3 break-words text-3xl font-black leading-tight tracking-tight sm:text-4xl lg:text-[2.7rem]"
+            style={{ color: headerTextColor }}
+          >
+            {snap.name}
+          </h1>
+        </div>
+      </div>
+
+      {settings?.showDescription !== false && description && (
+        <p
+          className="max-w-xl text-sm leading-relaxed sm:text-base"
+          style={{ color: headerTextColor, opacity: 0.85 }}
+        >
+          {description}
+        </p>
+      )}
+
+      {welcomeMessage && (
+        <p
+          className="max-w-xl text-sm font-semibold leading-relaxed"
+          style={{
+            color: primaryColor ?? headerTextColor,
+          }}
+        >
+          {welcomeMessage}
+        </p>
+      )}
+
+      {settings?.showLocation !== false && location && (
+        <div
+          className="flex items-start gap-2 text-sm"
+          style={{ color: headerTextColor, opacity: 0.85 }}
+        >
+          <span aria-hidden="true">📍</span>
+
+          {mapsUrl ? (
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold underline underline-offset-4"
+            >
+              {location}
+            </a>
+          ) : (
+            <span>{location}</span>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span
+          className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${
+            snap.isOpen
+              ? "bg-ok-soft text-ok"
+              : "bg-bad-soft text-bad"
+          }`}
+        >
+          <span
+            className={`size-2.5 rounded-full ${
+              snap.isOpen
+                ? "animate-pulse bg-ok"
+                : "bg-bad"
+            }`}
+          />
+          {snap.isOpen ? t.open : t.closed}
+        </span>
+
+        <span
+          className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm"
+          style={{
+            color: headerTextColor,
+            backgroundColor: headerBackgroundColor,
+          }}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+          {mins === 0
+            ? t.updatedNow
+            : fill(t.updated, { n: mins })}
+        </span>
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -428,9 +569,7 @@ export function PublicStall({
         }
       `}</style>
 
-      {/* ===================================
-          CONFIRMACIÓN DE RESERVA
-      =================================== */}
+      {/* CONFIRMACIÓN DE RESERVA */}
 
       {confirmation && (
         <div
@@ -473,10 +612,7 @@ export function PublicStall({
               )}
 
               {confirmation.code && (
-                <PickupCode
-                  code={confirmation.code}
-                  t={t}
-                />
+                <PickupCode code={confirmation.code} t={t} />
               )}
 
               {stampCard && (
@@ -525,184 +661,40 @@ export function PublicStall({
       ))}
 
       {/* ===================================
-          ENCABEZADO DEL NEGOCIO
+          ENCABEZADO CON DOS OPCIONES
       =================================== */}
 
-      <header className="overflow-hidden rounded-[2rem] border border-line bg-surface shadow-sm">
-        <div
-          className={
-            settings?.showCover === false
-              ? "grid grid-cols-1"
-              : "grid lg:grid-cols-[1.15fr_0.85fr]"
-          }
-        >
-          <div className="flex min-w-0 flex-col justify-center gap-6 px-6 py-8 sm:px-9 sm:py-12 lg:px-12 lg:py-14">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-7">
-              <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-3xl border border-line bg-[#fff9ed] shadow-sm sm:h-36 sm:w-36">
-                {logoUrl ? (
-                  <CustomImage
-                    key={logoUrl}
-                    src={logoUrl}
-                    fallback={logoFallback}
-                    alt={`Logo de ${snap.name}`}
-                    className="h-full w-full object-contain p-1"
-                  />
-                ) : logoFallback ? (
-                  <Image
-                    src={logoFallback}
-                    alt={`Logo de ${snap.name}`}
-                    fill
-                    sizes="(min-width: 640px) 144px, 128px"
-                    className="object-contain p-1"
-                    priority
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-5xl">
-                    🏪
-                  </div>
-                )}
-              </div>
-
-              <div className="min-w-0">
-                {tagline && (
-                  <p
-                    className="text-xs font-bold uppercase tracking-[0.18em] text-brand"
-                    style={
-                      primaryColor
-                        ? { color: primaryColor }
-                        : undefined
-                    }
-                  >
-                    {tagline}
-                  </p>
-                )}
-
-                <h1
-                  className="mt-3 break-words text-3xl font-black leading-tight tracking-tight text-[#2e1b14] sm:text-4xl lg:text-[2.7rem]"
-                  style={
-                    textColor
-                      ? { color: textColor }
-                      : undefined
-                  }
-                >
-                  {snap.name}
-                </h1>
-              </div>
+      <header className="relative overflow-hidden rounded-[2rem] border border-line bg-surface shadow-sm">
+        {backgroundHero ? (
+          <div className="relative isolate min-h-[430px] p-4 sm:p-8 lg:flex lg:min-h-[550px] lg:items-center lg:p-12">
+            {/* FOTO DE FONDO COMPLETA */}
+            <div className="absolute inset-0 -z-20">
+              {coverPhoto}
             </div>
 
-            {settings?.showDescription !== false && description && (
-              <p className="max-w-xl text-sm leading-relaxed text-muted sm:text-base">
-                {description}
-              </p>
-            )}
+            {/* CAPA PARA DESTACAR EL CUADRO */}
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-black/20" />
 
-            {welcomeMessage && (
-              <p
-                className="max-w-xl text-sm font-semibold leading-relaxed"
-                style={
-                  primaryColor
-                    ? { color: primaryColor }
-                    : undefined
-                }
-              >
-                {welcomeMessage}
-              </p>
-            )}
-
-            {settings?.showLocation !== false && location && (
-              <div className="flex items-start gap-2 text-sm text-muted">
-                <span aria-hidden="true">📍</span>
-
-                {mapsUrl ? (
-                  <a
-                    href={mapsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-semibold underline underline-offset-4"
-                  >
-                    {location}
-                  </a>
-                ) : (
-                  <span>{location}</span>
-                )}
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-3">
-              <span
-                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${
-                  snap.isOpen
-                    ? "bg-ok-soft text-ok"
-                    : "bg-bad-soft text-bad"
-                }`}
-              >
-                <span
-                  className={`size-2.5 rounded-full ${
-                    snap.isOpen
-                      ? "animate-pulse bg-ok"
-                      : "bg-bad"
-                  }`}
-                />
-
-                {snap.isOpen ? t.open : t.closed}
-              </span>
-
-              <span className="inline-flex items-center gap-2 rounded-full border border-line bg-background px-4 py-2 text-sm text-muted">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v5l3 2" />
-                </svg>
-
-                {mins === 0
-                  ? t.updatedNow
-                  : fill(t.updated, { n: mins })}
-              </span>
-            </div>
+            {headerInformation}
           </div>
+        ) : (
+          <div
+            className={
+              showCover
+                ? "grid lg:grid-cols-[1.15fr_0.85fr]"
+                : "grid grid-cols-1"
+            }
+          >
+            {headerInformation}
 
-          {settings?.showCover !== false && (
-            <div className="relative min-h-[240px] overflow-hidden bg-[#f4e5d5] sm:min-h-[320px] lg:min-h-[380px]">
-              {coverUrl ? (
-                <CustomImage
-                  key={coverUrl}
-                  src={coverUrl}
-                  fallback={coverFallback}
-                  alt={`Portada de ${snap.name}`}
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              ) : coverFallback ? (
-                <Image
-                  src={coverFallback}
-                  alt={
-                    es
-                      ? "Plato de birria tradicional"
-                      : "Traditional birria plate"
-                  }
-                  fill
-                  sizes="(min-width: 1024px) 40vw, 100vw"
-                  className="object-cover"
-                  priority
-                />
-              ) : (
-                <div className="flex min-h-[240px] items-center justify-center text-7xl">
-                  🍽️
-                </div>
-              )}
-
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-            </div>
-          )}
-        </div>
+            {showCover && (
+              <div className="relative min-h-[240px] overflow-hidden bg-[#f4e5d5] sm:min-h-[320px] lg:min-h-[380px]">
+                {coverPhoto}
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       {/* ===================================
@@ -923,7 +915,9 @@ export function PublicStall({
                 : undefined
             }
           >
-            {es ? "Estamos para ayudarte" : "We're here to help"}
+            {es
+              ? "Estamos para ayudarte"
+              : "We're here to help"}
           </p>
 
           <h2
@@ -997,7 +991,7 @@ export function PublicStall({
       )}
 
       {/* ===================================
-          HORARIOS Y CONTACTO CENTRADOS
+          HORARIOS Y CONTACTO
       =================================== */}
 
       {(hasHours || hasContact) && (
@@ -1111,9 +1105,7 @@ export function PublicStall({
         </section>
       )}
 
-      {/* ===================================
-          GALERÍA
-      =================================== */}
+      {/* GALERÍA */}
 
       {settings?.showGallery !== false && gallery.length > 0 && (
         <section className="space-y-6">
@@ -1140,20 +1132,12 @@ export function PublicStall({
         </section>
       )}
 
-      {/* FOOTER */}
-
       <footer className="border-t border-line pt-8 text-center">
-        <p className="text-xs text-muted">
-          {t.madeWith}
-        </p>
+        <p className="text-xs text-muted">{t.madeWith}</p>
       </footer>
     </div>
   );
 }
-
-// ==========================================
-// TARJETA DE SELLOS
-// ==========================================
 
 function StampCard({
   slug,
@@ -1165,7 +1149,6 @@ function StampCard({
   t: Dictionary;
 }) {
   const p = t.public;
-
   const [phone, setPhone] = useState("");
   const [bad, setBad] = useState(false);
 
@@ -1305,10 +1288,6 @@ function StampCard({
   );
 }
 
-// ==========================================
-// CÓDIGO DE RECOGIDA — FUNCIÓN NUEVA
-// ==========================================
-
 function PickupCode({
   code,
   t,
@@ -1321,7 +1300,6 @@ function PickupCode({
       <span className="rounded-2xl bg-surface px-4 py-2 font-mono text-3xl font-black tracking-[0.3em] text-foreground">
         {code}
       </span>
-
       <span className="text-sm font-semibold leading-snug">
         {t.public.pickupCodeHint}
       </span>

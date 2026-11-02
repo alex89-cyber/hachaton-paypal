@@ -299,7 +299,7 @@ export function CameraCapture({
     setAttempt((current) => current + 1);
   }
 
-  async function usePhoto() {
+  async function uploadCapturedPhoto() {
     if (!photo || saving) return;
 
     setSaving(true);
@@ -474,7 +474,7 @@ export function CameraCapture({
 
               <button
                 type="button"
-                onClick={() => void usePhoto()}
+                onClick={() => void uploadCapturedPhoto()}
                 disabled={saving}
                 className="rounded-xl bg-[#a3341f] px-6 py-3 text-sm font-bold text-white hover:bg-[#862a1a] disabled:opacity-50"
               >

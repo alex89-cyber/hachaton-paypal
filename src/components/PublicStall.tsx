@@ -1,6 +1,6 @@
 
 "use client";
-
+import PublicRewardsSection from "./PublicRewardsSection";
 import Image from "next/image";
 import {
   useEffect,
@@ -1455,29 +1455,15 @@ export function PublicStall({
   // RECOMPENSAS
   // ========================================
 
+  
   const rewardsSection = stampCard ? (
-    <section className="min-w-0 space-y-6 sm:space-y-8">
-      <div>
-        <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-brand">
-          {es
-            ? "Gracias por tu preferencia"
-            : "Thanks for choosing us"}
-        </p>
-
-        <h2 className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl">
-          {es
-            ? "Tus recompensas"
-            : "Your rewards"}
-        </h2>
-      </div>
-
-      <StampCard
-        slug={snap.slug}
-        card={stampCard}
-        t={t}
-      />
-    </section>
+    <PublicRewardsSection
+      slug={snap.slug}
+      lang={lang}
+      card={stampCard}
+    />
   ) : null;
+
 
   // ========================================
   // HORARIOS

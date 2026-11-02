@@ -1181,12 +1181,9 @@ export function PublicStall({
         </span>
 
         <span
+          suppressHydrationWarning
           className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm"
-          style={{
-            color: headerTextColor,
-            backgroundColor:
-              headerBackgroundColor,
-          }}
+          style={{ color: headerTextColor }}
         >
           ◷{" "}
           {mins === 0

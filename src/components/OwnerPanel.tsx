@@ -2,12 +2,16 @@
 "use client";
 
 import Image from "next/image";
+import { OwnerOperationsPanel } from "@/components/OwnerOperationsPanel";
+import OwnerRewardPinCard from "@/components/OwnerRewardPinCard";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { Dictionary } from "@/dictionaries";
 import { clock, fill, money, qty } from "@/lib/format";
 import { menuAvailability } from "@/lib/inventory";
+
+
 import {
   type CashUp,
   cardLabel,
@@ -416,8 +420,13 @@ export function OwnerPanel({
         </ol>
       </details>
 
-      {/* RESERVACIONES */}
-      <Reservations
+      {/* APARTADOS Y PIN EN DOS COLUMNAS */}
+      <OwnerOperationsPanel
+        lang={lang}
+        hasReservations={view.reservations.length > 0}
+        pin={<OwnerRewardPinCard slug={view.slug} lang={lang} />}
+        reservations={
+          <Reservations
         view={view}
         t={t}
         lang={lang}
@@ -489,6 +498,8 @@ export function OwnerPanel({
             });
           }
         }}
+          />
+        }
       />
 
       {/* PUNTO DE VENTA */}

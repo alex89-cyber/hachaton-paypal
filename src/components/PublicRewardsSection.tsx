@@ -4,6 +4,12 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
+import RewardPinRedeemer from "./RewardPinRedeemer";
+
+// ==========================================
+// TIPOS
+// ==========================================
+
 type Language = "es" | "en";
 
 type StampCardInfo = {
@@ -28,11 +34,21 @@ type Props = {
   card: StampCardInfo;
 };
 
-function colorOrDefault(value: string): string {
+// ==========================================
+// FUNCIONES AUXILIARES
+// ==========================================
+
+function colorOrDefault(
+  value: string,
+): string {
   return /^#[0-9a-fA-F]{6}$/.test(value)
     ? value
     : "#B4230B";
 }
+
+// ==========================================
+// COMPONENTE PRINCIPAL
+// ==========================================
 
 export default function PublicRewardsSection({
   slug,
@@ -41,24 +57,36 @@ export default function PublicRewardsSection({
 }: Props) {
   const es = lang === "es";
 
+  // Configuración del negocio
   const [config, setConfig] =
     useState<LoyaltyAppearance | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [phone, setPhone] = useState("");
-  const [badPhone, setBadPhone] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
+
+  // Consulta por teléfono
+  const [phone, setPhone] =
+    useState("");
+
+  const [badPhone, setBadPhone] =
+    useState(false);
+
+  const [checkingPhone, setCheckingPhone] =
+    useState(false);
 
   // ========================================
-  // CARGAR LA PERSONALIZACIÓN REAL
+  // CARGAR PERSONALIZACIÓN DESDE SUPABASE
   // ========================================
 
   useEffect(() => {
     const controller = new AbortController();
 
-    async function load() {
+    async function loadConfig() {
       try {
         const response = await fetch(
-          `/api/stalls/${encodeURIComponent(slug)}/loyalty/public`,
+          `/api/stalls/${encodeURIComponent(
+            slug,
+          )}/loyalty/public`,
           {
             cache: "no-store",
             signal: controller.signal,
@@ -66,7 +94,9 @@ export default function PublicRewardsSection({
         );
 
         if (!response.ok) {
-          throw new Error("loyalty_config_unavailable");
+          throw new Error(
+            "loyalty_config_unavailable",
+          );
         }
 
         const data =
@@ -78,7 +108,7 @@ export default function PublicRewardsSection({
       } catch (error) {
         if (!controller.signal.aborted) {
           console.error(
-            "Could not load public rewards settings:",
+            "No se pudo cargar la configuración de recompensas:",
             error,
           );
         }
@@ -89,9 +119,11 @@ export default function PublicRewardsSection({
       }
     }
 
-    void load();
+    void loadConfig();
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+    };
   }, [slug]);
 
   // ========================================
@@ -102,17 +134,26 @@ export default function PublicRewardsSection({
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+
+    if (checkingPhone) return;
+
     setBadPhone(false);
+    setCheckingPhone(true);
 
     try {
       const response = await fetch(
-        `/api/stalls/${encodeURIComponent(slug)}/card`,
+        `/api/stalls/${encodeURIComponent(
+          slug,
+        )}/card`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ phone }),
+          credentials: "same-origin",
+          body: JSON.stringify({
+            phone: phone.trim(),
+          }),
         },
       );
 
@@ -121,26 +162,36 @@ export default function PublicRewardsSection({
         return;
       }
 
+      // La API guarda la identificación de
+      // la tarjeta en la cookie del cliente.
+      // Recargamos para obtener el saldo.
       window.location.reload();
     } catch {
       setBadPhone(true);
+    } finally {
+      setCheckingPhone(false);
     }
   }
 
-  // No mostrar un programa desactivado.
+  // ========================================
+  // PROGRAMA DESACTIVADO
+  // ========================================
+
   if (config?.enabled === false) {
     return null;
   }
 
-  // Evitar mostrar momentáneamente una
-  // tarjeta con estilos anteriores.
+  // ========================================
+  // ESTADO DE CARGA
+  // ========================================
+
   if (loading) {
     return (
       <section
-        className="rounded-[1.75rem] border border-line bg-surface p-6 shadow-sm"
+        className="rounded-[1.75rem] border border-[#eaded3] bg-white p-6 shadow-sm"
         aria-busy="true"
       >
-        <p className="text-sm text-muted">
+        <p className="text-sm text-[#80695d]">
           {es
             ? "Cargando recompensas..."
             : "Loading rewards..."}
@@ -149,8 +200,10 @@ export default function PublicRewardsSection({
     );
   }
 
-  // Si la API falla, conservamos la tarjeta
-  // anterior en lugar de perder el acceso.
+  // ========================================
+  // DATOS DE LA TARJETA
+  // ========================================
+
   const total = Math.max(
     1,
     Math.min(
@@ -160,35 +213,63 @@ export default function PublicRewardsSection({
     ),
   );
 
-  const have = Math.max(0, card.have ?? 0);
-  const filled = Math.min(have, total);
-  const remaining = Math.max(0, total - filled);
-
-  const stampEmoji = config?.stampEmoji || "⭐";
-  const rewardEmoji = config?.rewardEmoji || "🎁";
-
-  const stampColor = colorOrDefault(
-    config?.stampColor || "#B4230B",
+  const have = Math.max(
+    0,
+    card.have ?? 0,
   );
+
+  const filled = Math.min(
+    have,
+    total,
+  );
+
+  const remaining = Math.max(
+    0,
+    total - filled,
+  );
+
+  const stampEmoji =
+    config?.stampEmoji || "⭐";
+
+  const rewardEmoji =
+    config?.rewardEmoji || "🎁";
+
+  const stampColor =
+    colorOrDefault(
+      config?.stampColor || "#B4230B",
+    );
 
   const reward =
     config?.rewardText?.trim() ||
     card.reward ||
-    (es ? "Tu premio" : "Your reward");
+    (es
+      ? "Tu premio"
+      : "Your reward");
 
   const conditions =
-    config?.rewardConditions?.trim() || "";
+    config?.rewardConditions?.trim() ||
+    "";
 
-  const ready = have >= total;
+  // ========================================
+  // RECOMPENSA COMPLETADA
+  // ========================================
+
+  const ready =
+    card.have !== null &&
+    have >= total;
 
   return (
     <section className="min-w-0 space-y-6 sm:space-y-8">
-      {/* ENCABEZADO */}
+      {/* ==================================
+          ENCABEZADO
+      ================================== */}
 
       <div>
         <p
           className="mb-3 text-xs font-bold uppercase tracking-[0.2em]"
-          style={{ color: stampColor }}
+          style={{
+            color: stampColor,
+          }}
         >
           {es
             ? "Gracias por tu preferencia"
@@ -196,24 +277,34 @@ export default function PublicRewardsSection({
         </p>
 
         <h2 className="text-3xl font-black tracking-tight text-[#2e1b14] sm:text-4xl">
-          {es ? "Tus recompensas" : "Your rewards"}
+          {es
+            ? "Tus recompensas"
+            : "Your rewards"}
         </h2>
       </div>
 
-      {/* TARJETA */}
+      {/* ==================================
+          TARJETA DE SELLOS
+      ================================== */}
 
-      <div className="rounded-[1.75rem] border border-line bg-surface p-6 shadow-sm sm:p-9">
+      <div className="rounded-[1.75rem] border border-[#eaded3] bg-white p-6 shadow-sm sm:p-9">
+        {/* TÍTULO Y CONTADOR */}
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-xl font-bold text-[#2e1b14]">
-            {es ? "Tarjeta de sellos" : "Stamp card"}
+            {es
+              ? "Tarjeta de sellos"
+              : "Stamp card"}
           </h3>
 
-          <span className="rounded-full border border-line bg-background/70 px-4 py-2 text-sm font-bold text-[#2e1b14]">
+          <span className="rounded-full border border-[#eaded3] bg-[#fffaf4] px-4 py-2 text-sm font-bold text-[#2e1b14]">
             {have} / {total}
           </span>
         </div>
 
-        {/* SELLOS PERSONALIZADOS */}
+        {/* ==================================
+            SELLOS PERSONALIZADOS
+        ================================== */}
 
         <ol
           className="mt-7 grid grid-cols-5 gap-2 sm:grid-cols-10"
@@ -226,24 +317,32 @@ export default function PublicRewardsSection({
           {Array.from(
             { length: total },
             (_, index) => {
-              const completed = index < filled;
-              const isLast = index === total - 1;
+              const completed =
+                index < filled;
+
+              const isLast =
+                index === total - 1;
 
               return (
                 <li
                   key={index}
-                  className="flex aspect-square items-center justify-center rounded-full border-2 text-xl font-bold"
+                  className="flex aspect-square min-w-0 items-center justify-center rounded-full border-2 text-xl font-bold sm:text-2xl"
                   style={
                     completed
                       ? {
-                          backgroundColor: stampColor,
-                          borderColor: stampColor,
+                          backgroundColor:
+                            stampColor,
+                          borderColor:
+                            stampColor,
                           color: "#ffffff",
                         }
                       : {
-                          borderColor: "#eaded3",
-                          borderStyle: "dashed",
-                          backgroundColor: "#ffffff",
+                          borderColor:
+                            "#eaded3",
+                          borderStyle:
+                            "dashed",
+                          backgroundColor:
+                            "#ffffff",
                         }
                   }
                 >
@@ -258,27 +357,39 @@ export default function PublicRewardsSection({
           )}
         </ol>
 
-        {/* PROGRESO */}
+        {/* ==================================
+            PROGRESO
+        ================================== */}
 
-        <p className="mt-7 text-sm leading-6 text-[#60483d]">
-          {ready
-            ? es
-              ? "¡Completaste los sellos necesarios para tu premio!"
-              : "You've collected enough stamps for your reward!"
-            : es
-              ? `Llevas ${have} de ${total}. Te faltan ${remaining} ${
-                  remaining === 1 ? "sello" : "sellos"
-                } para completar tu tarjeta.`
-              : `You have ${have} of ${total} stamps. ${
-                  remaining === 1
-                    ? "1 more stamp is needed"
-                    : `${remaining} more stamps are needed`
-                } to complete your card.`}
-        </p>
+        <div className="mt-7">
+          {ready ? (
+            <p className="text-sm font-medium leading-6 text-[#60483d]">
+              {es
+                ? "¡Completaste los sellos necesarios para tu premio!"
+                : "You have collected enough stamps for your reward!"}
+            </p>
+          ) : (
+            <p className="text-sm leading-6 text-[#60483d]">
+              {es
+                ? `Llevas ${have} de ${total}. Te faltan ${remaining} ${
+                    remaining === 1
+                      ? "sello"
+                      : "sellos"
+                  } para completar tu tarjeta.`
+                : `You have ${have} of ${total} stamps. ${
+                    remaining === 1
+                      ? "1 more stamp is needed"
+                      : `${remaining} more stamps are needed`
+                  } to complete your card.`}
+            </p>
+          )}
+        </div>
 
-        {/* PREMIO DEL NEGOCIO */}
+        {/* ==================================
+            PREMIO PERSONALIZADO
+        ================================== */}
 
-        <div className="mt-6 rounded-2xl border border-[#eaded3] bg-[#fffaf4] p-4">
+        <div className="mt-6 rounded-2xl border border-[#eaded3] bg-[#fffaf4] p-4 sm:p-5">
           <div className="flex items-start gap-3">
             <span
               aria-hidden="true"
@@ -287,12 +398,14 @@ export default function PublicRewardsSection({
               {rewardEmoji}
             </span>
 
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-[#302018]">
-                {es ? "Tu premio" : "Your reward"}
+                {es
+                  ? "Tu premio"
+                  : "Your reward"}
               </p>
 
-              <p className="mt-1 break-words text-sm text-[#60483d]">
+              <p className="mt-1 break-words text-sm leading-6 text-[#60483d]">
                 {reward}
               </p>
 
@@ -305,7 +418,51 @@ export default function PublicRewardsSection({
           </div>
         </div>
 
-        {/* CONSULTAR SELLOS */}
+        {/* ==================================
+            CANJEAR CON PIN
+            SOLO SI COMPLETÓ LOS SELLOS
+        ================================== */}
+
+        {ready && (
+          <div className="mt-6">
+            <div className="mb-4 rounded-2xl border border-[#dcebdd] bg-[#f0faf1] p-4">
+              <div className="flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="text-2xl"
+                >
+                  🎉
+                </span>
+
+                <div className="min-w-0">
+                  <p className="font-bold text-[#246b35]">
+                    {es
+                      ? "¡Tu recompensa está lista!"
+                      : "Your reward is ready!"}
+                  </p>
+
+                  <p className="mt-1 text-sm leading-6 text-[#426e4b]">
+                    {es
+                      ? "Cuando recibas tu premio, solicita al negocio su PIN de seis dígitos para confirmar el canje."
+                      : "When you receive your reward, ask the business for its six-digit PIN to confirm redemption."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* FORMULARIO REAL DE PIN */}
+
+            <RewardPinRedeemer
+              slug={slug}
+              lang={lang}
+            />
+          </div>
+        )}
+
+        {/* ==================================
+            CONSULTAR TARJETA
+            POR TELÉFONO
+        ================================== */}
 
         {card.have === null && (
           <form
@@ -325,30 +482,46 @@ export default function PublicRewardsSection({
               <input
                 id="public-loyalty-phone"
                 type="tel"
-                value={phone}
-                onChange={(event) => {
-                  setPhone(event.target.value);
-                  setBadPhone(false);
-                }}
                 inputMode="tel"
                 autoComplete="tel"
+                value={phone}
+                onChange={(event) => {
+                  setPhone(
+                    event.target.value,
+                  );
+
+                  setBadPhone(false);
+                }}
                 placeholder={
                   es
                     ? "55 1234 5678"
                     : "Your phone number"
                 }
-                className="min-w-0 flex-1 rounded-2xl border border-line bg-background px-4 py-3 text-[#302018] outline-none focus:border-brand"
+                className="min-w-0 flex-1 rounded-2xl border border-[#eaded3] bg-white px-4 py-3 text-[#302018] outline-none focus:border-[#a63822]"
               />
 
               <button
                 type="submit"
-                disabled={phone.replace(/\D/g, "").length < 10}
-                className="rounded-2xl px-6 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={
+                  checkingPhone ||
+                  phone.replace(
+                    /\D/g,
+                    "",
+                  ).length < 10
+                }
+                className="rounded-2xl px-6 py-3 font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
                 style={{
-                  backgroundColor: stampColor,
+                  backgroundColor:
+                    stampColor,
                 }}
               >
-                {es ? "Consultar" : "Check"}
+                {checkingPhone
+                  ? es
+                    ? "Consultando..."
+                    : "Checking..."
+                  : es
+                    ? "Consultar"
+                    : "Check"}
               </button>
             </div>
 

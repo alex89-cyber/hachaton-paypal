@@ -11,6 +11,7 @@ import {
 
 import { PayPalError } from "@/lib/paypal";
 import { notifyWaiting } from "@/lib/push";
+
 import {
   cancel,
   deliver,
@@ -25,11 +26,10 @@ import {
   unauthorized,
 } from "@/lib/owner-auth";
 
+// ==========================================
 // GET /api/stalls/:slug
 // GET /api/stalls/:slug?view=owner
-// POST /api/stalls/:slug
-//
-// Owner actions require authentication.
+// ==========================================
 
 export async function GET(
   request: Request,
@@ -70,7 +70,7 @@ export async function GET(
 }
 
 // ==========================================
-// VALIDATION
+// VALIDACIÓN
 // ==========================================
 
 const UNITS = [
@@ -86,7 +86,6 @@ const line = z.object({
   qty: z.number().int().min(1).max(50),
 });
 
-// Color values accepted by the visual editor.
 const color = z
   .string()
   .regex(
@@ -94,7 +93,6 @@ const color = z
     "invalid_color",
   );
 
-// Uploaded images will be represented by URLs.
 const imageUrl = z
   .string()
   .url()
@@ -122,12 +120,25 @@ const openingHour = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/),
 });
 
+// ==========================================
+// APARIENCIA DEL NEGOCIO
+// ==========================================
+
 const theme = z.object({
   primaryColor: color.optional(),
   secondaryColor: color.optional(),
   backgroundColor: color.optional(),
   textColor: color.optional(),
   buttonColor: color.optional(),
+
+  // Encabezado personalizado
+  headerBackgroundColor: color.optional(),
+  headerTextColor: color.optional(),
+
+  // Ubicación de la portada
+  coverPosition: z
+    .enum(["right", "background"])
+    .optional(),
 
   typography: z
     .enum([
@@ -150,44 +161,57 @@ const theme = z.object({
   roundedButtons: z.boolean().optional(),
 });
 
+// ==========================================
+// CONFIGURACIÓN DEL NEGOCIO
+// ==========================================
+
 const settings = z.object({
-  // Images
+  // Imágenes
   logoUrl: imageUrl.optional(),
   coverUrl: imageUrl.optional(),
 
   galleryUrls: z
-    .array(z.string().url().max(2048))
+    .array(
+      z.string().url().max(2048),
+    )
     .max(20)
     .optional(),
 
-  
-  galleryPhotos: z.array(
-    z.object({
-      id: z.string().min(1).max(100),
-      url: z.string().url().max(2048),
-      titleEs: z.string().max(100),
-      titleEn: z.string().max(100),
-      captionEs: z.string().max(300),
-      captionEn: z.string().max(300),
-    }),
-  ).max(20).optional(),
+  // Galería personalizada
+  galleryPhotos: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(100),
+        url: z.string().url().max(2048),
+        titleEs: z.string().max(100),
+        titleEn: z.string().max(100),
+        captionEs: z.string().max(300),
+        captionEn: z.string().max(300),
+      }),
+    )
+    .max(20)
+    .optional(),
 
-  sectionOrder: z.array(
-    z.object({
-      id: z.enum([
-        "menu",
-        "chat",
-        "rewards",
-        "hours",
-        "location",
-        "social",
-        "gallery",
-      ]),
-      visible: z.boolean(),
-    }),
-  ).max(7).optional(),
+  // Orden y visibilidad de secciones
+  sectionOrder: z
+    .array(
+      z.object({
+        id: z.enum([
+          "menu",
+          "chat",
+          "rewards",
+          "hours",
+          "location",
+          "social",
+          "gallery",
+        ]),
+        visible: z.boolean(),
+      }),
+    )
+    .max(7)
+    .optional(),
 
-    // Text and business identity
+  // Identidad y textos
   descriptionEs: optionalText(2000),
   descriptionEn: optionalText(2000),
 
@@ -197,7 +221,7 @@ const settings = z.object({
   welcomeMessageEs: optionalText(500),
   welcomeMessageEn: optionalText(500),
 
-  // Location
+  // Ubicación
   address: optionalText(300),
   city: optionalText(100),
   state: optionalText(100),
@@ -220,9 +244,10 @@ const settings = z.object({
     .nullable()
     .optional(),
 
-  // Contact and social media
+  // Contacto
   phone: optionalText(40),
   whatsapp: optionalText(40),
+
   email: z
     .union([
       z.string().email().max(254),
@@ -235,16 +260,16 @@ const settings = z.object({
   tiktok: optionalText(2048),
   website: optionalUrl,
 
-  // Opening hours
+  // Horarios
   openingHours: z
     .array(openingHour)
     .max(7)
     .optional(),
 
-  // Visual appearance
+  // Apariencia visual
   theme: theme.optional(),
 
-  // Public-page sections
+  // Secciones públicas
   showCover: z.boolean().optional(),
   showDescription: z.boolean().optional(),
   showLocation: z.boolean().optional(),
@@ -254,28 +279,32 @@ const settings = z.object({
 });
 
 // ==========================================
-// OWNER ACTIONS
+// ACCIONES DEL DUEÑO
 // ==========================================
 
 const Action = z.discriminatedUnion(
   "action",
   [
+    // VENTA
     z.object({
       action: z.literal("sale"),
       lines: z
         .array(line)
         .min(1)
         .max(20),
+
       method: z.enum([
         "cash",
         "card",
       ]),
+
       customerPhone: z
         .string()
         .max(30)
         .optional(),
     }),
 
+    // REABASTECIMIENTO
     z.object({
       action: z.literal("restock"),
       adds: z.record(
@@ -287,31 +316,38 @@ const Action = z.discriminatedUnion(
       ),
     }),
 
+    // AGREGAR SELLO
     z.object({
       action: z.literal("stamp"),
+
       cardId: z
         .string()
         .min(1)
         .max(100)
         .optional(),
+
       phone: z
         .string()
         .max(30)
         .optional(),
+
       name: z
         .string()
         .max(60)
         .optional(),
     }),
 
+    // MARCAR AGOTADO
     z.object({
       action: z.literal("soldOut"),
       dishId: z.string().min(1),
       soldOut: z.boolean(),
     }),
 
+    // ABRIR JORNADA
     z.object({
       action: z.literal("open"),
+
       counts: z.record(
         z.string(),
         z
@@ -321,16 +357,18 @@ const Action = z.discriminatedUnion(
       ),
     }),
 
+    // CERRAR JORNADA
     z.object({
       action: z.literal("close"),
     }),
 
+    // REINICIAR DEMOSTRACIÓN
     z.object({
       action: z.literal("reset"),
     }),
 
     // ======================================
-    // SAVE MENU
+    // GUARDAR MENÚ
     // ======================================
 
     z.object({
@@ -343,11 +381,13 @@ const Action = z.discriminatedUnion(
               .string()
               .min(1)
               .max(60),
+
             name: z
               .string()
               .trim()
               .min(1)
               .max(60),
+
             unit: z.enum(UNITS),
           }),
         )
@@ -392,6 +432,7 @@ const Action = z.discriminatedUnion(
                     .string()
                     .min(1)
                     .max(60),
+
                   qty: z
                     .number()
                     .positive()
@@ -406,7 +447,7 @@ const Action = z.discriminatedUnion(
     }),
 
     // ======================================
-    // NEW: SAVE BUSINESS SETTINGS
+    // GUARDAR CONFIGURACIÓN
     // ======================================
 
     z.object({
@@ -422,29 +463,53 @@ const Action = z.discriminatedUnion(
     }),
 
     // ======================================
-    // RESERVATIONS
+    // APARTADOS
     // ======================================
 
     z.object({
       action: z.literal("deliver"),
-      reservationId: z.string().min(1),
-      code: z.string().max(8).optional(),
-      lastName: z.string().max(80).optional(),
+
+      reservationId: z
+        .string()
+        .min(1),
+
+      code: z
+        .string()
+        .max(8)
+        .optional(),
+
+      lastName: z
+        .string()
+        .max(80)
+        .optional(),
     }),
 
     z.object({
       action: z.literal(
         "cancelReservation",
       ),
-      reservationId: z.string().min(1),
+
+      reservationId: z
+        .string()
+        .min(1),
     }),
+
+    // ======================================
+    // CANJE ANTERIOR
+    //
+    // Conservamos la acción en el esquema
+    // para reconocer peticiones antiguas.
+    // El servidor bloqueará este camino.
+    // ======================================
 
     z.object({
       action: z.literal("redeem"),
+
       reservationId: z
         .string()
         .min(1)
         .optional(),
+
       cardId: z
         .string()
         .min(1)
@@ -453,7 +518,11 @@ const Action = z.discriminatedUnion(
   ],
 );
 
-// Operations that may restore availability.
+// ==========================================
+// OPERACIONES QUE PUEDEN
+// RESTAURAR DISPONIBILIDAD
+// ==========================================
+
 const MAY_BRING_BACK = new Set([
   "open",
   "soldOut",
@@ -461,6 +530,10 @@ const MAY_BRING_BACK = new Set([
   "reset",
   "restock",
 ]);
+
+// ==========================================
+// RESPUESTA AL AGREGAR SELLOS
+// ==========================================
 
 async function stamped(
   slug: string,
@@ -471,6 +544,7 @@ async function stamped(
     ...ownerView(
       (await store.get(slug))!,
     ),
+
     stamped: {
       cardId,
       stamps,
@@ -479,7 +553,7 @@ async function stamped(
 }
 
 // ==========================================
-// POST
+// POST /api/stalls/:slug
 // ==========================================
 
 export async function POST(
@@ -488,10 +562,12 @@ export async function POST(
 ) {
   const { slug } = await ctx.params;
 
+  // Verificar sesión del dueño
   if (!(await isOwner())) {
     return unauthorized();
   }
 
+  // Verificar negocio
   if (!(await store.get(slug))) {
     return Response.json(
       { error: "not_found" },
@@ -499,6 +575,7 @@ export async function POST(
     );
   }
 
+  // Validar cuerpo
   const parsed = Action.safeParse(
     await request.json().catch(
       () => null,
@@ -513,6 +590,10 @@ export async function POST(
   }
 
   const a = parsed.data;
+
+  // ========================================
+  // NOTIFICACIONES DE DISPONIBILIDAD
+  // ========================================
 
   if (MAY_BRING_BACK.has(a.action)) {
     after(async () => {
@@ -530,9 +611,13 @@ export async function POST(
     });
   }
 
+  // ========================================
+  // EJECUTAR ACCIÓN
+  // ========================================
+
   switch (a.action) {
     // ======================================
-    // SALE
+    // VENTA
     // ======================================
 
     case "sale": {
@@ -563,6 +648,8 @@ export async function POST(
         );
       }
 
+      // Agregar sello cuando se proporciona
+      // un teléfono válido.
       if (card) {
         return stamped(
           slug,
@@ -581,7 +668,7 @@ export async function POST(
     }
 
     // ======================================
-    // RESTOCK
+    // REABASTECER INVENTARIO
     // ======================================
 
     case "restock": {
@@ -603,7 +690,7 @@ export async function POST(
     }
 
     // ======================================
-    // STAMP
+    // AGREGAR SELLO
     // ======================================
 
     case "stamp": {
@@ -632,7 +719,7 @@ export async function POST(
     }
 
     // ======================================
-    // SOLD OUT
+    // MARCAR AGOTADO
     // ======================================
 
     case "soldOut":
@@ -647,7 +734,7 @@ export async function POST(
       );
 
     // ======================================
-    // OPEN
+    // ABRIR JORNADA
     // ======================================
 
     case "open":
@@ -661,7 +748,7 @@ export async function POST(
       );
 
     // ======================================
-    // CLOSE
+    // CERRAR JORNADA
     // ======================================
 
     case "close": {
@@ -677,7 +764,7 @@ export async function POST(
     }
 
     // ======================================
-    // SAVE MENU
+    // GUARDAR MENÚ
     // ======================================
 
     case "saveMenu": {
@@ -698,6 +785,7 @@ export async function POST(
         ),
       );
 
+      // Evitar ingredientes duplicados
       if (
         names.size !==
         a.ingredients.length
@@ -711,6 +799,7 @@ export async function POST(
         );
       }
 
+      // Validar recetas
       if (
         a.dishes.some(
           (d) =>
@@ -728,6 +817,7 @@ export async function POST(
         );
       }
 
+      // Platillos que permanecerán
       const kept = new Set(
         a.dishes.flatMap(
           (d) =>
@@ -737,6 +827,8 @@ export async function POST(
         ),
       );
 
+      // No eliminar platillos con
+      // apartados activos.
       const held =
         s.reservations.filter(
           (r) =>
@@ -756,6 +848,7 @@ export async function POST(
         );
       }
 
+      // Guardar menú
       const next =
         await store.saveMenu(
           slug,
@@ -772,7 +865,8 @@ export async function POST(
                     d.nameEn ||
                     d.nameEs,
 
-                  // Preserve old image when omitted.
+                  // Mantener imagen anterior
+                  // cuando no se envía otra.
                   imageUrl:
                     d.imageUrl ===
                     undefined
@@ -796,7 +890,7 @@ export async function POST(
     }
 
     // ======================================
-    // NEW: SAVE SETTINGS
+    // GUARDAR CONFIGURACIÓN
     // ======================================
 
     case "saveSettings": {
@@ -825,7 +919,7 @@ export async function POST(
     }
 
     // ======================================
-    // RESET DEMO
+    // REINICIAR DEMOSTRACIÓN
     // ======================================
 
     case "reset":
@@ -843,7 +937,11 @@ export async function POST(
       );
 
     // ======================================
-    // DELIVER / CANCEL RESERVATION
+    // ENTREGAR O CANCELAR APARTADO
+    //
+    // Esta operación conserva el flujo
+    // original de PayPal y códigos de
+    // entrega de los apartados.
     // ======================================
 
     case "deliver":
@@ -855,7 +953,10 @@ export async function POST(
           const r = await deliver(
             slug,
             a.reservationId,
-            { code: a.code, lastName: a.lastName },
+            {
+              code: a.code,
+              lastName: a.lastName,
+            },
           );
 
           if (r !== "ok") {
@@ -863,7 +964,8 @@ export async function POST(
               { error: r },
               {
                 status:
-                  r === "wrong_code" || r === "wrong_last_name"
+                  r === "wrong_code" ||
+                  r === "wrong_last_name"
                     ? 403
                     : 409,
               },
@@ -900,44 +1002,34 @@ export async function POST(
     }
 
     // ======================================
-    // REDEEM REWARD
+    // CANJE DE RECOMPENSAS
+    //
+    // IMPORTANTE:
+    // El sistema antiguo canjeaba
+    // recompensas sin verificar PIN.
+    //
+    // A partir de ahora rechazamos
+    // esta operación para que el cliente
+    // utilice la ruta independiente de
+    // canje mediante PIN.
+    //
+    // No descontamos sellos aquí.
+    // No descontamos inventario aquí.
     // ======================================
 
     case "redeem": {
-      const card =
-        a.cardId ??
-        (a.reservationId
-          ? (
-              await store.getReservation(
-                slug,
-                a.reservationId,
-              )
-            )?.payerId
-          : null);
-
-      if (!card) {
-        return Response.json(
-          { error: "not_found" },
-          { status: 404 },
-        );
-      }
-
-      const res = await store.redeem(
-        slug,
-        card,
-      );
-
-      if (!res.ok) {
-        return Response.json(
-          { error: res.reason },
-          { status: 409 },
-        );
-      }
-
       return Response.json(
-        ownerView(
-          (await store.get(slug))!,
-        ),
+        {
+          error: "pin_required",
+          message:
+            "Para canjear una recompensa es necesario validar el PIN del negocio.",
+        },
+        {
+          status: 409,
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        },
       );
     }
   }

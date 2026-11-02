@@ -1,290 +1,285 @@
 
 "use client";
 
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 
-import type {
-  GalleryPhoto,
-} from "@/lib/gallery";
-
-import {
-  getGalleryText,
-} from "@/lib/gallery";
+type GalleryPhoto = {
+  id: string;
+  url: string;
+  titleEs: string;
+  titleEn: string;
+  captionEs: string;
+  captionEn: string;
+};
 
 type Props = {
+  lang: "es" | "en";
   photos: GalleryPhoto[];
-  lang?: "es" | "en";
 };
 
 export default function PublicGallery({
+  lang,
   photos,
-  lang = "es",
 }: Props) {
-  const [activeIndex, setActiveIndex] =
-    useState<number | null>(null);
-
   const es = lang === "es";
 
-  const active =
-    activeIndex === null
-      ? null
-      : photos[activeIndex] ?? null;
+  const [selected, setSelected] =
+    useState<number | null>(null);
 
-  function close() {
-    setActiveIndex(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+
+  const isOpen = selected !== null;
+
+  const current =
+    selected === null ? null : photos[selected];
+
+  function getTitle(photo: GalleryPhoto) {
+    return (
+      es
+        ? photo.titleEs
+        : photo.titleEn || photo.titleEs
+    ).trim();
   }
 
-  function previous() {
-    setActiveIndex((current) => {
-      if (current === null) return null;
-
-      return (
-        current - 1 + photos.length
-      ) % photos.length;
-    });
+  function getCaption(photo: GalleryPhoto) {
+    return (
+      es
+        ? photo.captionEs
+        : photo.captionEn || photo.captionEs
+    ).trim();
   }
 
-  function next() {
-    setActiveIndex((current) => {
-      if (current === null) return null;
+  function openPhoto(index: number) {
+    previousFocus.current =
+      document.activeElement as HTMLElement;
 
-      return (
-        current + 1
-      ) % photos.length;
-    });
+    setSelected(index);
+  }
+
+  function closePhoto() {
+    setSelected(null);
+  }
+
+  function nextPhoto() {
+    setSelected((value) =>
+      value === null
+        ? null
+        : (value + 1) % photos.length,
+    );
+  }
+
+  function previousPhoto() {
+    setSelected((value) =>
+      value === null
+        ? null
+        : (value - 1 + photos.length) %
+          photos.length,
+    );
   }
 
   useEffect(() => {
-    if (activeIndex === null) return;
+    if (!isOpen) return;
 
-    function keydown(event: KeyboardEvent) {
+    const previousOverflow =
+      document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+
+    function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setActiveIndex(null);
-      }
-
-      if (event.key === "ArrowLeft") {
-        setActiveIndex((current) =>
-          current === null
-            ? null
-            : (
-                current - 1 + photos.length
-              ) % photos.length,
-        );
+        setSelected(null);
       }
 
       if (event.key === "ArrowRight") {
-        setActiveIndex((current) =>
-          current === null
+        event.preventDefault();
+        setSelected((value) =>
+          value === null
             ? null
-            : (
-                current + 1
-              ) % photos.length,
+            : (value + 1) % photos.length,
+        );
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setSelected((value) =>
+          value === null
+            ? null
+            : (value - 1 + photos.length) %
+              photos.length,
         );
       }
     }
 
     window.addEventListener(
       "keydown",
-      keydown,
+      onKeyDown,
     );
 
     return () => {
+      document.body.style.overflow =
+        previousOverflow;
+
       window.removeEventListener(
         "keydown",
-        keydown,
+        onKeyDown,
       );
+
+      previousFocus.current?.focus();
     };
-  }, [activeIndex, photos.length]);
+  }, [isOpen, photos.length]);
 
   if (!photos.length) return null;
 
   return (
-    <>
-      <section className="space-y-5">
-        <h2 className="text-3xl font-black tracking-tight text-[#2e1b14]">
-          {es
-            ? "Nuestra galería"
-            : "Our gallery"}
-        </h2>
+    <section className="min-w-0 space-y-6">
+      <h2 className="text-3xl font-black tracking-tight text-[#2e1b14]">
+        {es
+          ? "Nuestra galería"
+          : "Our gallery"}
+      </h2>
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {photos.map((photo, index) => {
-            const text =
-              getGalleryText(photo, lang);
+      {/* FOTOGRAFÍAS SIN TEXTO DEBAJO */}
 
-            return (
-              <button
-                key={photo.id}
-                type="button"
-                onClick={() =>
-                  setActiveIndex(index)
-                }
-                className="overflow-hidden rounded-[1.5rem] border border-[#eaded3] bg-white text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-                aria-label={
-                  text.title ||
-                  (es
-                    ? `Abrir fotografía ${index + 1}`
-                    : `Open photo ${index + 1}`)
-                }
-              >
-                <div className="aspect-square overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={photo.url}
-                    alt={
-                      text.title ||
-                      (es
-                        ? `Fotografía ${index + 1}`
-                        : `Photo ${index + 1}`)
-                    }
-                    loading="lazy"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-
-                {(text.title || text.caption) && (
-                  <div className="space-y-1 p-3">
-                    {text.title && (
-                      <h3 className="text-sm font-bold text-[#302018]">
-                        {text.title}
-                      </h3>
-                    )}
-
-                    {text.caption && (
-                      <p className="text-xs leading-5 text-[#80695d]">
-                        {text.caption}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 lg:gap-6">
+        {photos.map((photo, index) => (
+          <button
+            key={`${photo.id}-${photo.url}`}
+            type="button"
+            onClick={() => openPhoto(index)}
+            aria-label={
+              getTitle(photo) ||
+              `${es ? "Abrir fotografía" : "Open photo"} ${index + 1}`
+            }
+            className="group aspect-square overflow-hidden rounded-[1.75rem] border border-line bg-surface text-left shadow-sm transition hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photo.url}
+              alt={
+                getTitle(photo) ||
+                `${es ? "Fotografía" : "Photo"} ${index + 1}`
+              }
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          </button>
+        ))}
+      </div>
 
       {/* VISOR AMPLIADO */}
 
-      {active && (
+      {current && (
         <div
           role="presentation"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-3 sm:p-8"
           onMouseDown={(event) => {
             if (
-              event.target ===
-              event.currentTarget
+              event.target === event.currentTarget
             ) {
-              close();
+              closePhoto();
             }
           }}
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 sm:p-8"
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label={
-              es
+              getTitle(current) ||
+              (es
                 ? "Fotografía ampliada"
-                : "Enlarged photo"
+                : "Expanded photo")
             }
-            className="relative flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white"
+            className="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
           >
+            {/* ENCABEZADO DEL VISOR */}
+
             <div className="flex items-center justify-between border-b border-[#eaded3] px-4 py-3">
-              <span className="text-sm font-semibold text-[#302018]">
-                {activeIndex !== null
-                  ? `${activeIndex + 1} / ${photos.length}`
-                  : ""}
+              <span className="text-sm font-semibold text-[#60483d]">
+                {selected! + 1} / {photos.length}
               </span>
 
               <button
+                ref={closeRef}
                 type="button"
-                onClick={close}
-                className="rounded-lg px-3 py-2 text-lg font-bold text-[#302018] hover:bg-gray-100"
+                onClick={closePhoto}
                 aria-label={
                   es
                     ? "Cerrar fotografía"
                     : "Close photo"
                 }
+                className="rounded-lg px-3 py-2 text-xl font-bold text-[#302018] hover:bg-[#fff4e9]"
               >
-                ✕
+                ×
               </button>
             </div>
 
-            <div className="relative flex min-h-0 flex-1 items-center justify-center bg-[#161616]">
+            {/* IMAGEN Y NAVEGACIÓN */}
+
+            <div className="flex min-h-0 flex-1 items-center justify-between gap-2 bg-[#211b19] p-2 sm:p-4">
+              <button
+                type="button"
+                disabled={photos.length <= 1}
+                aria-label={
+                  es
+                    ? "Foto anterior"
+                    : "Previous photo"
+                }
+                onClick={previousPhoto}
+                className="shrink-0 rounded-full bg-white/15 px-3 py-2 text-2xl text-white hover:bg-white/30 disabled:opacity-30"
+              >
+                ‹
+              </button>
+
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={active.url}
+                src={current.url}
                 alt={
-                  getGalleryText(
-                    active,
-                    lang,
-                  ).title ||
-                  "Fotografía ampliada"
+                  getTitle(current) ||
+                  (es
+                    ? "Fotografía ampliada"
+                    : "Expanded photo")
                 }
-                className="max-h-[65vh] max-w-full object-contain"
+                className="max-h-[63dvh] min-w-0 max-w-full object-contain"
               />
 
-              {photos.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={previous}
-                    aria-label={
-                      es
-                        ? "Fotografía anterior"
-                        : "Previous photo"
-                    }
-                    className="absolute left-2 rounded-full bg-white/90 px-3 py-2 text-2xl font-bold text-black shadow-md hover:bg-white sm:left-4"
-                  >
-                    ‹
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={next}
-                    aria-label={
-                      es
-                        ? "Siguiente fotografía"
-                        : "Next photo"
-                    }
-                    className="absolute right-2 rounded-full bg-white/90 px-3 py-2 text-2xl font-bold text-black shadow-md hover:bg-white sm:right-4"
-                  >
-                    ›
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                disabled={photos.length <= 1}
+                aria-label={
+                  es
+                    ? "Foto siguiente"
+                    : "Next photo"
+                }
+                onClick={nextPhoto}
+                className="shrink-0 rounded-full bg-white/15 px-3 py-2 text-2xl text-white hover:bg-white/30 disabled:opacity-30"
+              >
+                ›
+              </button>
             </div>
 
-            {(() => {
-              const text =
-                getGalleryText(
-                  active,
-                  lang,
-                );
+            {/* TEXTO SOLO AL ABRIR LA FOTO */}
 
-              return (
-                (text.title || text.caption) && (
-                  <div className="space-y-1 px-5 py-4">
-                    {text.title && (
-                      <h3 className="text-lg font-bold text-[#302018]">
-                        {text.title}
-                      </h3>
-                    )}
+            {(getTitle(current) ||
+              getCaption(current)) && (
+              <div className="max-h-[20dvh] overflow-y-auto px-5 py-4 text-[#302018]">
+                {getTitle(current) && (
+                  <h3 className="text-lg font-black">
+                    {getTitle(current)}
+                  </h3>
+                )}
 
-                    {text.caption && (
-                      <p className="text-sm leading-6 text-[#80695d]">
-                        {text.caption}
-                      </p>
-                    )}
-                  </div>
-                )
-              );
-            })()}
+                {getCaption(current) && (
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#60483d]">
+                    {getCaption(current)}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
-    </>
+    </section>
   );
 }

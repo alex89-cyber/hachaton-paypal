@@ -160,7 +160,34 @@ const settings = z.object({
     .max(20)
     .optional(),
 
-  // Text and business identity
+  
+  galleryPhotos: z.array(
+    z.object({
+      id: z.string().min(1).max(100),
+      url: z.string().url().max(2048),
+      titleEs: z.string().max(100),
+      titleEn: z.string().max(100),
+      captionEs: z.string().max(300),
+      captionEn: z.string().max(300),
+    }),
+  ).max(20).optional(),
+
+  sectionOrder: z.array(
+    z.object({
+      id: z.enum([
+        "menu",
+        "chat",
+        "rewards",
+        "hours",
+        "location",
+        "social",
+        "gallery",
+      ]),
+      visible: z.boolean(),
+    }),
+  ).max(7).optional(),
+
+    // Text and business identity
   descriptionEs: optionalText(2000),
   descriptionEn: optionalText(2000),
 

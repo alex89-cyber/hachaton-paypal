@@ -1,5 +1,6 @@
 
 import type { OrderLine } from "../inventory";
+
 import type {
   CashUp,
   PaymentMethod,
@@ -8,16 +9,35 @@ import type {
   StallState,
 } from "../stall";
 
+import type {
+  LoyaltyExpiryAction,
+  LoyaltyPeriodKind,
+} from "../loyalty-period";
+
+// ==========================================
+// SALES
+// ==========================================
+
 export type SaleResult =
-  | { ok: true; state: StallState }
+  | {
+      ok: true;
+      state: StallState;
+    }
   | {
       ok: false;
       reason: "closed" | "short";
       short?: string[];
     };
 
+// ==========================================
+// REWARD REDEMPTION
+// ==========================================
+
 export type RedeemResult =
-  | { ok: true; stampsLeft: number }
+  | {
+      ok: true;
+      stampsLeft: number;
+    }
   | {
       ok: false;
       reason:
@@ -27,9 +47,14 @@ export type RedeemResult =
         | "no_reward";
     };
 
+// ==========================================
+// PUSH NOTIFICATIONS
+// ==========================================
+
 /**
- * A browser push subscription waiting for the stall
- * to open (dishId null) or a dish to come back.
+ * A browser push subscription waiting for the
+ * stall to open (dishId null) or a dish to
+ * become available again.
  */
 export type Watch = {
   dishId: string | null;
@@ -39,22 +64,34 @@ export type Watch = {
   lang: "es" | "en";
 };
 
+// ==========================================
+// RESERVATIONS
+// ==========================================
+
 export type ReserveResult =
-  | { ok: true; reservation: Reservation }
+  | {
+      ok: true;
+      reservation: Reservation;
+    }
   | {
       ok: false;
       reason: "closed" | "short";
       short?: string[];
     };
 
+// ==========================================
+// MENU EDITOR
+// ==========================================
+
 /**
  * The whole menu as the owner edits it.
  *
- * Ingredients are keyed by their id, or by "new:N"
- * when just added, and recipes point at those keys.
+ * Ingredients are keyed by their id, or by
+ * "new:N" when just added, and recipes
+ * point at those keys.
  *
- * Anything left out is removed (archived, since
- * past sales still point at it).
+ * Anything left out is removed (archived,
+ * since past sales still point at it).
  *
  * New ingredients start with no stock.
  */
@@ -67,9 +104,12 @@ export type MenuInput = {
 
   dishes: {
     id: string | null;
+
     nameEs: string;
     nameEn: string;
+
     imageUrl: string | null;
+
     priceCents: number;
 
     recipe: {
@@ -79,27 +119,184 @@ export type MenuInput = {
   }[];
 };
 
+// ==========================================
+// BUSINESS SETTINGS
+// ==========================================
+
 /**
- * Configuración del negocio.
+ * Business customization.
  *
- * El nombre se guarda por separado porque ya existe
- * como propiedad principal en StallState.
+ * Name is stored independently because it
+ * already exists as a main StallState property.
  *
- * El resto de los campos corresponden a StallSettings.
+ * All other settings belong to StallSettings.
  */
 export type SettingsInput = {
   name: string;
   settings: StallSettings;
 };
 
+// ==========================================
+// LOYALTY CONFIGURATION
+// ==========================================
+
 /**
- * Everything the screens need.
+ * Each business can independently configure
+ * how its rewards program works.
  *
- * The demo runs on memory.
+ * These properties correspond to the loyalty
+ * columns introduced in migration 0010.
+ */
+export type LoyaltyConfigInput = {
+  /**
+   * Whether customers can currently earn
+   * new stamps.
+   *
+   * Disabling does not delete their history.
+   */
+  enabled: boolean;
+
+  /**
+   * Number of stamps needed for one reward.
+   *
+   * Existing stamp balances are preserved
+   * when this number changes.
+   */
+  stampsPerReward: number;
+
+  /**
+   * The dish awarded to the customer.
+   *
+   * null means no reward dish selected.
+   */
+  rewardDishId: string | null;
+
+  /**
+   * none:
+   *   Stamps do not expire.
+   *
+   * calendar_week:
+   *   Monday through Sunday, using
+   *   the business timezone.
+   *
+   * calendar_month:
+   *   First through last day of the month.
+   *
+   * rolling_days:
+   *   A fixed number of days starting
+   *   when the first stamp is earned.
+   */
+  periodKind: LoyaltyPeriodKind;
+
+  /**
+   * Used only for rolling_days.
+   * Supported range: 1 to 365.
+   */
+  periodDays: number;
+
+  /**
+   * reset:
+   *   Incomplete stamps are reset when
+   *   the configured period ends.
+   *
+   * keep:
+   *   Accumulated stamps are preserved.
+   */
+  expiryAction: LoyaltyExpiryAction;
+
+  /**
+   * Number of days for which an earned
+   * reward remains redeemable.
+   *
+   * null means the reward does not expire.
+   */
+  rewardValidDays: number | null;
+};
+
+// ==========================================
+// LOYALTY CARD INFORMATION
+// ==========================================
+
+/**
+ * Detailed customer-facing stamp card data.
+ *
+ * Timestamps use ISO 8601 UTC values.
+ * The interface translates dates to the
+ * business timezone for display.
+ */
+export type LoyaltyCardStatus = {
+  cardId: string;
+
+  enabled: boolean;
+
+  stamps: number;
+
+  stampsRequired: number;
+
+  stampsRemaining: number;
+
+  /**
+   * Current earning period.
+   *
+   * null when there is no expiration.
+   */
+  periodStartedAt: string | null;
+
+  periodEndsAt: string | null;
+
+  /**
+   * Number of rewards already earned
+   * but not yet redeemed or expired.
+   */
+  availableRewards: number;
+
+  /**
+   * Date when the nearest available
+   * reward expires, if applicable.
+   */
+  nextRewardExpiresAt: string | null;
+
+  /**
+   * Whether the current earning period
+   * has ended before reconciliation.
+   */
+  expired: boolean;
+};
+
+// ==========================================
+// LOYALTY CONFIGURATION RESULT
+// ==========================================
+
+export type LoyaltyConfigResult =
+  | {
+      ok: true;
+      state: StallState;
+    }
+  | {
+      ok: false;
+      reason:
+        | "invalid_config"
+        | "reward_not_found";
+    };
+
+// ==========================================
+// STALL STORE
+// ==========================================
+
+/**
+ * Everything the application screens need.
+ *
+ * The demo uses in-memory storage.
  * Supabase implements the same interface.
  */
 export interface StallStore {
-  get(slug: string): Promise<StallState | null>;
+  // ========================================
+  // BUSINESS
+  // ========================================
+
+  get(
+    slug: string,
+  ): Promise<StallState | null>;
 
   open(
     slug: string,
@@ -113,11 +310,19 @@ export interface StallStore {
     cashUp: CashUp;
   }>;
 
+  // ========================================
+  // SALES
+  // ========================================
+
   recordSale(
     slug: string,
     lines: OrderLine[],
     method: PaymentMethod,
   ): Promise<SaleResult>;
+
+  // ========================================
+  // INVENTORY
+  // ========================================
 
   setSoldOut(
     slug: string,
@@ -126,60 +331,113 @@ export interface StallStore {
   ): Promise<StallState>;
 
   /**
-   * Adds stock mid-day ({ ingredientId: amount });
-   * clears "sold out" on dishes made from it.
+   * Adds stock mid-day.
+   * { ingredientId: amount }
+   *
+   * Clears "sold out" on dishes
+   * made from restocked ingredients.
    */
   restock(
     slug: string,
     adds: Record<string, number>,
   ): Promise<
-    | { ok: true; state: StallState }
-    | { ok: false; reason: "closed" }
+    | {
+        ok: true;
+        state: StallState;
+      }
+    | {
+        ok: false;
+        reason: "closed";
+      }
   >;
 
+  // ========================================
+  // MENU
+  // ========================================
+
   /**
-   * Replaces dishes, prices, ingredients and recipes.
+   * Replaces dishes, prices,
+   * ingredients and recipes.
    */
   saveMenu(
     slug: string,
     menu: MenuInput,
   ): Promise<StallState>;
 
+  // ========================================
+  // BUSINESS CUSTOMIZATION
+  // ========================================
+
   /**
-   * PERSONALIZACIÓN DEL NEGOCIO.
+   * Saves the business name, branding,
+   * gallery, address, opening hours,
+   * social links and page preferences.
    *
-   * Guarda nombre, identidad visual, imágenes,
-   * descripción, ubicación, redes sociales,
-   * horarios y preferencias de presentación.
-   *
-   * Por ahora es opcional para permitir agregar
-   * la implementación a memory.ts y supabase.ts
-   * sin romper las funciones existentes.
-   *
-   * Cuando ambos almacenes lo implementen,
-   * lo convertiremos en obligatorio.
+   * Optional until all stores support it.
    */
   saveSettings?(
     slug: string,
     input: SettingsInput,
   ): Promise<StallState>;
 
+  // ========================================
+  // LOYALTY CUSTOMIZATION
+  // ========================================
+
   /**
-   * Demo only: put the stall back to its seeded state.
+   * Saves the rewards program rules
+   * for one particular business.
+   *
+   * The implementation must preserve:
+   * - Existing customer stamps
+   * - Earned rewards
+   * - Purchase history
+   * - Previous redemptions
+   *
+   * This is optional while the memory
+   * and Supabase implementations are
+   * being updated.
+   */
+  saveLoyaltyConfig?(
+    slug: string,
+    config: LoyaltyConfigInput,
+  ): Promise<LoyaltyConfigResult>;
+
+  /**
+   * Returns current customer progress
+   * after checking applicable periods
+   * and expiration rules.
+   *
+   * This is optional during migration
+   * to the new rewards system.
+   */
+  getLoyaltyCard?(
+    slug: string,
+    cardId: string,
+  ): Promise<LoyaltyCardStatus>;
+
+  // ========================================
+  // DEMO
+  // ========================================
+
+  /**
+   * Demo only: restore seeded operations.
    */
   reset(
     slug: string,
   ): Promise<StallState>;
 
-  // ==========================================
+  // ========================================
   // RESERVATIONS
-  // ==========================================
+  // ========================================
 
   /**
-   * Stock is taken when a reservation is made
-   * and given back if voided or expired.
+   * Stock is taken when a reservation
+   * is made and returned if it is
+   * voided or expired.
    *
-   * Delivering turns it into a PayPal sale.
+   * Delivering turns the reservation
+   * into a PayPal sale.
    */
   reserve(
     slug: string,
@@ -207,7 +465,9 @@ export interface StallStore {
   ): Promise<void>;
 
   /**
-   * authorized -> captured, recording the sale.
+   * authorized -> captured,
+   * recording the completed sale.
+   *
    * False if it was not authorized.
    */
   markDelivered(
@@ -217,9 +477,9 @@ export interface StallStore {
 
   /**
    * held/authorized -> voided/expired,
-   * giving the stock back.
+   * giving stock back.
    *
-   * False if it was already finished.
+   * False if already finished.
    */
   release(
     slug: string,
@@ -227,18 +487,27 @@ export interface StallStore {
     status: "voided" | "expired",
   ): Promise<boolean>;
 
-  // ==========================================
+  // ========================================
   // STAMP CARDS
-  // ==========================================
+  // ========================================
 
+  /**
+   * Returns the customer's current
+   * stamp balance.
+   *
+   * Kept for compatibility with
+   * existing screens and PayPal flows.
+   */
   stamps(
     slug: string,
     cardId: string,
   ): Promise<number>;
 
   /**
-   * One stamp on a card (created if new).
-   * Returns the stamps it now has.
+   * Adds one stamp to a card,
+   * creating the card if needed.
+   *
+   * Returns the updated balance.
    */
   addStamp(
     slug: string,
@@ -247,17 +516,17 @@ export interface StallStore {
   ): Promise<number>;
 
   /**
-   * Spends a reward's stamps and takes
-   * the reward dish out of stock.
+   * Redeems the configured reward
+   * and updates the dish inventory.
    */
   redeem(
     slug: string,
     cardId: string,
   ): Promise<RedeemResult>;
 
-  // ==========================================
+  // ========================================
   // PUSH NOTIFICATIONS
-  // ==========================================
+  // ========================================
 
   /**
    * "Avísame cuando haya".
@@ -268,9 +537,8 @@ export interface StallStore {
   ): Promise<void>;
 
   /**
-   * Removes and returns the watches that are due:
-   * all "opens" ones if open, plus those
-   * for these dishes.
+   * Removes and returns watches
+   * that should be notified.
    */
   claimWatches(
     slug: string,

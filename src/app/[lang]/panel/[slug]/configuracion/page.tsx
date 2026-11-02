@@ -18,6 +18,16 @@ import type {
 } from "react";
 
 import { CameraCapture } from "@/components/CameraCapture";
+
+import SectionOrderEditor, {
+  DEFAULT_PAGE_SECTIONS,
+  normalizePageSections,
+} from "@/components/SectionOrderEditor";
+
+import GalleryCaptionEditor from "@/components/GalleryCaptionEditor";
+
+import { normalizeGallery } from "@/lib/gallery";
+
 import type {
   OwnerView,
   StallOpeningHour,
@@ -72,6 +82,13 @@ function defaultSettings(): StallSettings {
     logoUrl: null,
     coverUrl: null,
     galleryUrls: [],
+    
+    galleryPhotos: [],
+
+    sectionOrder: DEFAULT_PAGE_SECTIONS.map((section) => ({
+    ...section,
+    })),
+
 
     descriptionEs: "",
     descriptionEn: "",
@@ -125,6 +142,29 @@ function mergeSettings(
       ? saved.openingHours
       : defaults.openingHours,
     galleryUrls: saved?.galleryUrls ?? [],
+    
+    galleryPhotos: normalizeGallery(
+    saved?.galleryUrls ?? [],
+    saved?.galleryPhotos ?? [],
+    ),
+
+    sectionOrder: normalizePageSections(
+    saved?.sectionOrder ??
+        DEFAULT_PAGE_SECTIONS.map((section) => ({
+        ...section,
+        visible:
+            section.id === "location"
+            ? saved?.showLocation !== false
+            : section.id === "hours"
+                ? saved?.showOpeningHours !== false
+                : section.id === "social"
+                ? saved?.showSocialLinks !== false
+                : section.id === "gallery"
+                    ? saved?.showGallery !== false
+                    : true,
+        })),
+    ),
+
   };
 }
 
@@ -982,7 +1022,7 @@ function BusinessConfigurationContent() {
 
   const panelHref = `/${lang}/panel/${slug}`;
   const publicHref = `/${lang}/${slug}`;
-
+  const rewardsHref = `/${lang}/panel/${slug}/configuracion/recompensas`;
   const loadData = useCallback(async () => {
     try {
       const response = await fetch(
@@ -1465,6 +1505,40 @@ function BusinessConfigurationContent() {
           {/* ==================================
               IDENTIDAD
           ================================== */}
+            {/* ==================================
+                PROGRAMA DE RECOMPENSAS
+            ================================== */}
+
+            <Section
+            title={es ? "🎁 Programa de recompensas" : "🎁 Rewards program"}
+            description={
+                es
+                ? "Personaliza los sellos, los premios y las fechas de vencimiento. También puedes desactivar las recompensas si tu negocio no las necesita."
+                : "Customize stamps, prizes and expiration dates. You can also disable rewards."
+            }
+            >
+            <Link
+                href={rewardsHref}
+                className="flex items-center justify-between gap-4 rounded-xl border border-[#eaded3] bg-[#fffaf4] px-5 py-4 transition hover:border-[#a3341f] hover:bg-[#fff1e7]"
+            >
+                <div>
+                <p className="font-bold text-[#302018]">
+                    {es ? "Personalizar recompensas" : "Customize rewards"}
+                </p>
+
+                <p className="mt-1 text-sm text-[#80695d]">
+                    {es
+                    ? "Configura la cantidad de sellos, el premio, los vencimientos y la apariencia de la tarjeta."
+                    : "Configure stamps, rewards, expiration dates and card appearance."}
+                </p>
+                </div>
+
+                <span className="text-xl font-bold text-[#a3341f]">
+                →
+                </span>
+            </Link>
+            </Section>
+
 
           <Section
             title={
@@ -1612,6 +1686,25 @@ function BusinessConfigurationContent() {
                 onRemove={(i) => removeImage("gallery", i)}
                 onOpenCamera={openCamera}
               />
+              
+                <GalleryCaptionEditor
+                lang={lang}
+                disabled={uploading || saving}
+                photos={normalizeGallery(
+                    settings.galleryUrls ?? [],
+                    settings.galleryPhotos ?? [],
+                )}
+                onChange={(photos) => {
+                    setNotice("");
+
+                    setSettings((current) => ({
+                    ...current,
+                    galleryPhotos: photos,
+                    galleryUrls: photos.map((photo) => photo.url),
+                    }));
+                }}
+                />
+
 
               {uploading && (
                 <div

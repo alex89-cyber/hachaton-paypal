@@ -1,12 +1,16 @@
 
 import { forecast, type SaleEvent } from "./forecast";
-
+import type { GalleryPhoto } from "./gallery";
 import {
   type Dish,
   type Ingredient,
   type OrderLine,
   menuAvailability,
 } from "./inventory";
+
+// ==========================================
+// VENTAS Y RESERVACIONES
+// ==========================================
 
 export type PaymentMethod = "cash" | "card" | "paypal";
 
@@ -37,14 +41,13 @@ export type Reservation = {
   paypalAuthorizationId: string | null;
   payerId: string | null;
 
-  /** 4 digits the customer says at the counter. */
+  /** Código de cuatro dígitos para recoger el pedido. */
   pickupCode: string | null;
 
-  /** Public order number, counted from 1 each business day. */
+  /** Número de pedido público. */
   orderNumber: number | null;
 };
 
-/** Hide the pickup code from the owner's screen. */
 export const HIDDEN_CODE = "****";
 
 const plain = (x: string) =>
@@ -54,7 +57,6 @@ const plain = (x: string) =>
     .toLowerCase()
     .trim();
 
-/** "Ana Ramírez López" → "Ana R." */
 export function shortName(name: string) {
   const [first, ...rest] = name.trim().split(/\s+/);
 
@@ -63,7 +65,6 @@ export function shortName(name: string) {
     : (first ?? "");
 }
 
-/** Check the surname without considering accents or case. */
 export function lastNameMatches(
   name: string,
   typed: string,
@@ -82,7 +83,6 @@ export function lastNameMatches(
   );
 }
 
-/** Next public order number for the active business day. */
 export function nextOrderNumber(
   reservations: Reservation[],
   openedAt: string | null,
@@ -103,7 +103,6 @@ export function nextOrderNumber(
 export const isActive = (r: Reservation) =>
   r.status === "held" || r.status === "authorized";
 
-/** Generate an unused four-digit pickup code. */
 export function newPickupCode(
   reservations: Reservation[],
 ) {
@@ -124,6 +123,10 @@ export function newPickupCode(
 
 export const HOLDS_COOKIE = "th_holds";
 export const PAYER_COOKIE = "th_payer";
+
+// ==========================================
+// TARJETAS DE RECOMPENSAS
+// ==========================================
 
 export type StampCard = {
   id: string;
@@ -168,14 +171,6 @@ export function cardLabel(c: {
 // PERSONALIZACIÓN DEL NEGOCIO
 // ==========================================
 
-/**
- * Las propiedades son opcionales para mantener
- * compatibilidad con los negocios existentes.
- *
- * Las imágenes se almacenan en Supabase Storage.
- * Aquí se guardan sus URLs.
- */
-
 export type StallTypography =
   | "modern"
   | "classic"
@@ -187,17 +182,6 @@ export type StallLayout =
   | "grid"
   | "compact";
 
-/**
- * NUEVO:
- *
- * right:
- *   Información a la izquierda y portada
- *   a la derecha.
- *
- * background:
- *   Portada detrás de todo el encabezado
- *   con tarjeta de información superpuesta.
- */
 export type StallCoverPosition =
   | "right"
   | "background";
@@ -215,17 +199,13 @@ export type StallTheme = {
   roundedCards?: boolean;
   roundedButtons?: boolean;
 
-  // ========================================
-  // NUEVA PERSONALIZACIÓN DEL ENCABEZADO
-  // ========================================
-
-  /** Color independiente de la tarjeta informativa. */
+  /** Color de fondo del cuadro informativo. */
   headerBackgroundColor?: string;
 
-  /** Color de texto dentro de la tarjeta informativa. */
+  /** Color de texto del cuadro informativo. */
   headerTextColor?: string;
 
-  /** Ubicación de la fotografía de portada. */
+  /** Ubicación de la portada. */
   coverPosition?: StallCoverPosition;
 };
 
@@ -236,14 +216,36 @@ export type StallOpeningHour = {
   close: string;
 };
 
+// ==========================================
+// CONFIGURACIÓN COMPLETA DEL NEGOCIO
+// ==========================================
+
 export type StallSettings = {
-  // ========================================
-  // IDENTIDAD
-  // ========================================
+  // IDENTIDAD E IMÁGENES
 
   logoUrl?: string | null;
   coverUrl?: string | null;
   galleryUrls?: string[];
+
+  // NUEVO: GALERÍA CON PIES DE FOTO
+
+  galleryPhotos?: GalleryPhoto[];
+
+  // NUEVO: ORDEN Y VISIBILIDAD DE SECCIONES
+
+  sectionOrder?: {
+    id:
+      | "menu"
+      | "chat"
+      | "rewards"
+      | "hours"
+      | "location"
+      | "social"
+      | "gallery";
+    visible: boolean;
+  }[];
+
+  // DESCRIPCIONES
 
   descriptionEs?: string;
   descriptionEn?: string;
@@ -254,9 +256,7 @@ export type StallSettings = {
   welcomeMessageEs?: string;
   welcomeMessageEn?: string;
 
-  // ========================================
   // UBICACIÓN
-  // ========================================
 
   address?: string;
   city?: string;
@@ -268,9 +268,7 @@ export type StallSettings = {
   latitude?: number | null;
   longitude?: number | null;
 
-  // ========================================
   // CONTACTO
-  // ========================================
 
   phone?: string;
   whatsapp?: string;
@@ -281,21 +279,15 @@ export type StallSettings = {
   tiktok?: string;
   website?: string;
 
-  // ========================================
   // HORARIOS
-  // ========================================
 
   openingHours?: StallOpeningHour[];
 
-  // ========================================
   // APARIENCIA
-  // ========================================
 
   theme?: StallTheme;
 
-  // ========================================
-  // VISIBILIDAD
-  // ========================================
+  // VISIBILIDAD ORIGINAL
 
   showCover?: boolean;
   showDescription?: boolean;
@@ -305,15 +297,27 @@ export type StallSettings = {
   showGallery?: boolean;
 };
 
-/**
- * Configuración inicial para negocios que todavía
- * no han personalizado su página.
- */
+// ==========================================
+// CONFIGURACIÓN PREDETERMINADA
+// ==========================================
+
 export function defaultStallSettings(): StallSettings {
   return {
     logoUrl: null,
     coverUrl: null,
+
     galleryUrls: [],
+    galleryPhotos: [],
+
+    sectionOrder: [
+      { id: "menu", visible: true },
+      { id: "chat", visible: true },
+      { id: "rewards", visible: true },
+      { id: "hours", visible: true },
+      { id: "location", visible: true },
+      { id: "social", visible: true },
+      { id: "gallery", visible: true },
+    ],
 
     descriptionEs: "",
     descriptionEn: "",
@@ -358,11 +362,7 @@ export function defaultStallSettings(): StallSettings {
       roundedCards: true,
       roundedButtons: true,
 
-      // Diseño original por defecto.
       coverPosition: "right",
-
-      // El encabezado puede tener otro color
-      // sin cambiar el fondo general.
       headerBackgroundColor: "#FFFFFF",
       headerTextColor: "#2E1B14",
     },
@@ -377,7 +377,7 @@ export function defaultStallSettings(): StallSettings {
 }
 
 // ==========================================
-// ESTADO DEL NEGOCIO
+// ESTADO COMPLETO DEL NEGOCIO
 // ==========================================
 
 export type StallState = {
@@ -401,10 +401,6 @@ export type StallState = {
 
   loyalty: Loyalty;
 
-  /**
-   * Personalización opcional.
-   * Los registros antiguos siguen siendo válidos.
-   */
   settings?: StallSettings;
 };
 
@@ -430,8 +426,6 @@ export type PublicSnapshot = {
   updatedAt: string;
 
   dishes: PublicDish[];
-
-  /** Apariencia e información pública del negocio. */
   settings?: StallSettings;
 };
 
@@ -439,9 +433,13 @@ export function publicSnapshot(
   s: StallState,
 ): PublicSnapshot {
   const left = new Map(
-    menuAvailability(s.dishes, s.ingredients).map(
-      (a) => [a.dishId, a.portions],
-    ),
+    menuAvailability(
+      s.dishes,
+      s.ingredients,
+    ).map((a) => [
+      a.dishId,
+      a.portions,
+    ]),
   );
 
   return {
@@ -495,10 +493,8 @@ export type OwnerView = {
 
   today: CashUp;
   reservations: Reservation[];
-
   loyalty: Loyalty;
 
-  /** Personalización editable desde el panel. */
   settings?: StallSettings;
 };
 
@@ -507,19 +503,23 @@ export function ownerView(
   now = new Date(),
 ): OwnerView {
   const avail = new Map(
-    menuAvailability(s.dishes, s.ingredients).map(
-      (a) => [a.dishId, a],
-    ),
+    menuAvailability(
+      s.dishes,
+      s.ingredients,
+    ).map((a) => [
+      a.dishId,
+      a,
+    ]),
   );
 
-  const events: SaleEvent[] = s.sales.flatMap(
-    (sale) =>
+  const events: SaleEvent[] =
+    s.sales.flatMap((sale) =>
       sale.lines.map((l) => ({
         dishId: l.dishId,
         qty: l.qty,
         at: new Date(sale.at),
       })),
-  );
+    );
 
   const fc = new Map(
     forecast(
@@ -527,11 +527,17 @@ export function ownerView(
       s.ingredients,
       events,
       now,
-    ).map((f) => [f.dishId, f]),
+    ).map((f) => [
+      f.dishId,
+      f,
+    ]),
   );
 
   const ingName = new Map(
-    s.ingredients.map((i) => [i.id, i.name]),
+    s.ingredients.map((i) => [
+      i.id,
+      i.name,
+    ]),
   );
 
   return {
@@ -557,10 +563,13 @@ export function ownerView(
             Number(isActive(a)) ||
           a.pickupBy.localeCompare(b.pickupBy),
       )
-      // Hide pickup codes and complete surnames.
       .map((r) => ({
         ...r,
-        customerName: shortName(r.customerName),
+
+        customerName: shortName(
+          r.customerName,
+        ),
+
         pickupCode: r.pickupCode
           ? HIDDEN_CODE
           : null,
@@ -570,7 +579,8 @@ export function ownerView(
       const a = avail.get(d.id);
       const f = fc.get(d.id);
 
-      const portions = a?.portions ?? 0;
+      const portions =
+        a?.portions ?? 0;
 
       return {
         id: d.id,
@@ -630,13 +640,17 @@ export type CashUp = {
   }[];
 };
 
-/**
- * RN-06: Corte de caja del día actual.
- */
+// ==========================================
+// RESUMEN DE VENTAS
+// ==========================================
+
 export function cashUp(
   s: StallState,
 ): CashUp {
-  const byMethod: Record<PaymentMethod, number> = {
+  const byMethod: Record<
+    PaymentMethod,
+    number
+  > = {
     cash: 0,
     card: 0,
     paypal: 0,
@@ -651,24 +665,33 @@ export function cashUp(
   >();
 
   const price = new Map(
-    s.dishes.map((d) => [d.id, d.priceCents]),
+    s.dishes.map((d) => [
+      d.id,
+      d.priceCents,
+    ]),
   );
 
   for (const sale of s.sales) {
-    byMethod[sale.method] += sale.totalCents;
+    byMethod[sale.method] +=
+      sale.totalCents;
 
     for (const l of sale.lines) {
-      const cur = perDish.get(l.dishId) ?? {
-        qty: 0,
-        totalCents: 0,
-      };
+      const cur =
+        perDish.get(l.dishId) ?? {
+          qty: 0,
+          totalCents: 0,
+        };
 
       cur.qty += l.qty;
 
       cur.totalCents +=
-        (price.get(l.dishId) ?? 0) * l.qty;
+        (price.get(l.dishId) ?? 0) *
+        l.qty;
 
-      perDish.set(l.dishId, cur);
+      perDish.set(
+        l.dishId,
+        cur,
+      );
     }
   }
 
@@ -683,30 +706,36 @@ export function cashUp(
     byMethod,
 
     byDish: s.dishes
-      .filter((d) => perDish.has(d.id))
+      .filter((d) =>
+        perDish.has(d.id),
+      )
       .map((d) => ({
         dishId: d.id,
         nameEs: d.nameEs,
         nameEn: d.nameEn,
+
         ...perDish.get(d.id)!,
       }))
       .sort(
         (a, b) =>
-          b.totalCents - a.totalCents,
+          b.totalCents -
+          a.totalCents,
       ),
 
-    used: s.ingredients.map((i) => ({
-      ingredientId: i.id,
-      name: i.name,
-      unit: i.unit,
+    used: s.ingredients.map(
+      (i) => ({
+        ingredientId: i.id,
+        name: i.name,
+        unit: i.unit,
 
-      used: Math.max(
-        0,
-        (s.openingCount[i.id] ?? i.stock) -
-          i.stock,
-      ),
+        used: Math.max(
+          0,
+          (s.openingCount[i.id] ??
+            i.stock) - i.stock,
+        ),
 
-      left: i.stock,
-    })),
+        left: i.stock,
+      }),
+    ),
   };
 }
